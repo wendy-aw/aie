@@ -1,3 +1,4 @@
+from typing import Dict, Any
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 import torch
@@ -27,7 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Helper function to wrap async operations with timeout
-async def with_timeout(coro, timeout_seconds, operation_name):
+async def with_timeout(coro: Any, timeout_seconds: int, operation_name: str) -> Any:
     try:
         return await asyncio.wait_for(coro, timeout=timeout_seconds)
     except asyncio.TimeoutError:
@@ -67,14 +68,14 @@ logger.info(f"Model and processor loaded successfully on {device}")
 
 # Task 2b: Check if service is working
 @app.get("/ping")
-async def ping():
+async def ping() -> Dict[str, str]:
     """Ping endpoint to check if service is working."""
     logger.info("Ping endpoint called")
     return {"message": "pong"}
 
 # Task 2c: ASR endpoint to transcribe audio
 @app.post("/asr")
-async def asr_transcribe(file: UploadFile = File(...)):
+async def asr_transcribe(file: UploadFile = File(...)) -> Dict[str, str]:
     """ASR endpoint to transcribe audio."""
     start_time = time.time()
     request_id = int(time.time() * 1000000)
@@ -101,7 +102,7 @@ async def asr_transcribe(file: UploadFile = File(...)):
             content={"error": str(e)}
         )
 
-async def _process_asr_request(file: UploadFile, request_id: int, start_time: float):
+async def _process_asr_request(file: UploadFile, request_id: int, start_time: float) -> Dict[str, str]:
     """Process ASR request with timeout and temporary file handling."""
     try:
         # Validate file format - only MP3 allowed
@@ -245,7 +246,7 @@ async def _process_asr_request(file: UploadFile, request_id: int, start_time: fl
         )
         raise HTTPException(status_code=500, detail=str(e))
 
-async def _run_inference(input_values):
+async def _run_inference(input_values: torch.Tensor) -> torch.Tensor:
     with torch.no_grad():
         return model(input_values).logits
 
