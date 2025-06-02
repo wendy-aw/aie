@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  asr-api:
+    build: .
+    container_name: asr-api
+    ports:
+      - "${PORT}:${PORT}"
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import sys,urllib.request; sys.exit(0) if urllib.request.urlopen('http://localhost:${PORT}/ping').status==200 else sys.exit(1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s

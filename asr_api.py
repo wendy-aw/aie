@@ -10,11 +10,11 @@ import time
 import asyncio
 from transformers import Wav2Vec2Processor, Wav2Vec2ForCTC
 
-# Configuration constants
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
-REQUEST_TIMEOUT = 60  # seconds
-INFERENCE_TIMEOUT = 30  # seconds
-LOG_LEVEL = logging.INFO  # Change to logging.DEBUG for verbose logging
+# Configuration from environment variables
+MAX_FILE_SIZE = int(os.getenv('MAX_FILE_SIZE_MB', '50')) * 1024 * 1024
+REQUEST_TIMEOUT = int(os.getenv('REQUEST_TIMEOUT_SECONDS', '60'))
+INFERENCE_TIMEOUT = int(os.getenv('INFERENCE_TIMEOUT_SECONDS', '30'))
+LOG_LEVEL = getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper())
 
 # Configure logging
 logging.basicConfig(
@@ -70,7 +70,6 @@ logger.info(f"Model and processor loaded successfully on {device}")
 @app.get("/ping")
 async def ping() -> Dict[str, str]:
     """Ping endpoint to check if service is working."""
-    logger.info("Ping endpoint called")
     return {"message": "pong"}
 
 # Task 2c: ASR endpoint to transcribe audio
@@ -113,16 +112,6 @@ async def _process_asr_request(file: UploadFile, request_id: int, start_time: fl
             raise HTTPException(
                 status_code=415,
                 detail="Only MP3 audio files are supported"
-            )
-        
-        # Validate content type
-        if file.content_type and not file.content_type.startswith('application/octet-stream'):
-            logger.warning(
-                f"Request {request_id} [{file.filename}] - Invalid content type: {file.content_type}"
-            )
-            raise HTTPException(
-                status_code=415,
-                detail="File must be binary data"
             )
         
         # Save uploaded file to temporary location

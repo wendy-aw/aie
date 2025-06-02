@@ -1,13 +1,10 @@
 #!/bin/bash
 
-# ASR API Server Startup Script
-# This script runs the ASR API with proper worker configuration
-
 # Set default values
 HOST=${HOST:-"0.0.0.0"}
 PORT=${PORT:-8001}
 WORKERS=${WORKERS:-$((2 * $(nproc) + 1))}
-PROD=${PROD:-"false"}
+PROD=${PROD:-"true"}
 
 echo "Starting ASR API server..."
 echo "Host: $HOST"
