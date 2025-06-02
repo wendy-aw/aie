@@ -25,22 +25,24 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Configuration
-API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:8001') # ASR API base URL
+# Configuration from environment variables
+API_PORT = int(os.getenv('PORT', '8001'))
+API_BASE_URL = os.getenv('API_BASE_URL', f"http://localhost:{API_PORT}")
 DATA_FOLDER = os.getenv('DATA_FOLDER', 'cv-valid-dev')
 INPUT_CSV = os.getenv('INPUT_CSV', 'cv-valid-dev.csv')
 OUTPUT_CSV = os.getenv('OUTPUT_CSV', 'cv-valid-dev-updated.csv')
-RETRY_ATTEMPTS = int(os.getenv('RETRY_ATTEMPTS', 3))
-RETRY_DELAY = int(os.getenv('RETRY_DELAY', 1))  # seconds
+RETRY_ATTEMPTS = int(os.getenv('RETRY_ATTEMPTS', '3'))
+RETRY_DELAY = int(os.getenv('RETRY_DELAY', '1'))
 
 # Calculate optimal concurrency based on API workers
 API_WORKERS = int(os.getenv('WORKERS', '1'))
-DEFAULT_CONCURRENT = API_WORKERS * 2 if API_WORKERS > 1 else 2  # 2x workers or min 2
-DEFAULT_BATCH_SIZE = 5  # Process files in batches for better efficiency
+DEFAULT_CONCURRENT = int(os.getenv('DEFAULT_CONCURRENT', str(API_WORKERS * 2 if API_WORKERS > 1 else 2)))
+DEFAULT_BATCH_SIZE = int(os.getenv('DEFAULT_BATCH_SIZE', '5'))
 
 # Configure logging
+LOG_LEVEL = getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper())
 logging.basicConfig(
-    level=logging.INFO,
+    level=LOG_LEVEL,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('cv-decode.log'),
