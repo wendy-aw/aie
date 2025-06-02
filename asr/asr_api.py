@@ -22,7 +22,7 @@ logging.basicConfig(
     level=LOG_LEVEL,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('asr_api.log'),
+        logging.FileHandler('logs/asr_api.log'),
         logging.StreamHandler()
     ]
 )

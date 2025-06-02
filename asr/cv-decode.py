@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Configuration from environment variables
+# Default configuration from environment variables
 API_PORT = int(os.getenv('PORT', '8001'))
 API_BASE_URL = os.getenv('API_BASE_URL', f"http://localhost:{API_PORT}")
 DATA_FOLDER = os.getenv('DATA_FOLDER', 'cv-valid-dev')
@@ -45,7 +45,7 @@ logging.basicConfig(
     level=LOG_LEVEL,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('cv-decode.log'),
+        logging.FileHandler('logs/cv-decode.log'),
         logging.StreamHandler()
     ]
 )
