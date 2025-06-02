@@ -1,6 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
-import uvicorn
 import torch
 import torchaudio
 import tempfile
@@ -8,7 +7,6 @@ import os
 import logging
 import time
 import asyncio
-import multiprocessing
 from transformers import Wav2Vec2Processor, Wav2Vec2ForCTC
 
 # Configuration constants
@@ -48,6 +46,15 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Detect device for inference
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+elif torch.backends.mps.is_available():
+    device = torch.device('mps')
+else:
+    device = torch.device('cpu')
+logger.info(f"Using device: {device}")
+
 # Load model and processor from Hugging Face
 logger.info("Loading Wav2Vec2 model and processor...")
 processor = Wav2Vec2Processor.from_pretrained(
@@ -55,8 +62,8 @@ processor = Wav2Vec2Processor.from_pretrained(
 )
 model = Wav2Vec2ForCTC.from_pretrained(
     "facebook/wav2vec2-large-960h"
-)
-logger.info("Model and processor loaded successfully")
+).to(device)
+logger.info(f"Model and processor loaded successfully on {device}")
 
 # Task 2b: Check if service is working
 @app.get("/ping")
@@ -108,13 +115,13 @@ async def _process_asr_request(file: UploadFile, request_id: int, start_time: fl
             )
         
         # Validate content type
-        if file.content_type and not file.content_type.startswith('audio/'):
+        if file.content_type and not file.content_type.startswith('application/octet-stream'):
             logger.warning(
                 f"Request {request_id} [{file.filename}] - Invalid content type: {file.content_type}"
             )
             raise HTTPException(
                 status_code=415,
-                detail="File must be an audio file"
+                detail="File must be binary data"
             )
         
         # Save uploaded file to temporary location
@@ -190,7 +197,7 @@ async def _process_asr_request(file: UploadFile, request_id: int, start_time: fl
             waveform.squeeze().numpy(),
             sampling_rate=16000,
             return_tensors="pt"
-        ).input_values
+        ).input_values.to(device)
         
         # Perform inference with timeout
         logits = await with_timeout(
@@ -242,8 +249,3 @@ async def _run_inference(input_values):
     with torch.no_grad():
         return model(input_values).logits
 
-if __name__ == "__main__":
-    num_workers = (2 * multiprocessing.cpu_count()) + 1
-    uvicorn.run(
-        app, host="0.0.0.0", port=8001, workers=num_workers
-    )
