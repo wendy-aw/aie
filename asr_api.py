@@ -128,87 +128,32 @@ async def asr_transcribe(
 async def _process_asr_request(file: UploadFile, request_id: int, start_time: float) -> Dict[str, str]:
     """Process ASR request with timeout and temporary file handling."""
     try:
-        # Validate file format - only MP3 allowed
-        if not file.filename or not file.filename.lower().endswith('.mp3'):
-            logger.warning(
-                f"Request {request_id} [{file.filename}] - Invalid file format. Only MP3 files are supported."
-            )
-            raise HTTPException(
-                status_code=415,
-                detail="Only MP3 audio files are supported"
-            )
+        # Process audio file using shared function
+        audio_result = await _process_audio_file(file, request_id)
         
-        # Save uploaded file to temporary location
-        with tempfile.NamedTemporaryFile(
-            delete=False, suffix='.mp3'
-        ) as temp_file:
-            content = await file.read()
+        if audio_result["status"] == "error":
+            error_msg = audio_result["error"]
+            logger.warning(f"Request {request_id} [{file.filename}] - {error_msg}")
             
-            # Check file size limit
-            file_size = len(content)
-            if file_size > MAX_FILE_SIZE:
-                logger.warning(
-                    f"Request {request_id} [{file.filename}] - File too large: {file_size} bytes"
-                )
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)}MB"
-                )
-            
-            temp_file.write(content)
-            temp_file_path = temp_file.name
+            # Map common errors to appropriate HTTP status codes
+            if "Only MP3" in error_msg:
+                raise HTTPException(status_code=415, detail="Only MP3 audio files are supported")
+            elif "File too large" in error_msg:
+                raise HTTPException(status_code=413, detail=error_msg)
+            elif "Empty or invalid" in error_msg or "Invalid sample rate" in error_msg:
+                raise HTTPException(status_code=422, detail="Corrupted or invalid audio file")
+            else:
+                raise HTTPException(status_code=422, detail="Failed to process audio file")
         
-        logger.debug(
-            f"Request {request_id} [{file.filename}] - File saved, size: {file_size} bytes"
-        )
+        # Extract waveform data
+        waveform = audio_result["waveform"]
+        duration = str(audio_result["duration"])
         
-        # Load audio with torchaudio
-        try:
-            waveform, sample_rate = torchaudio.load(temp_file_path)
-            # Validate audio properties
-            if waveform.size(0) == 0 or waveform.size(1) == 0:
-                raise ValueError("Empty or invalid audio data")
-            if sample_rate <= 0:
-                raise ValueError("Invalid sample rate")
-        except RuntimeError as e:
-            logger.warning(
-                f"Request {request_id} [{file.filename}] - Failed to load audio: {str(e)}"
-            )
-            if "file format" in str(e).lower():
-                raise HTTPException(status_code=415, detail="Unsupported audio format")
-            raise HTTPException(status_code=422, detail="Failed to decode audio file")
-        except Exception as e:
-            logger.warning(
-                f"Request {request_id} [{file.filename}] - Corrupted audio file: {str(e)}"
-            )
-            raise HTTPException(status_code=422, detail="Corrupted or invalid audio file")
-        
-        logger.debug(
-            f"Request {request_id} [{file.filename}] - Audio loaded, sample_rate: {sample_rate}"
-        )
-        
-        # Resample to 16kHz if needed
-        if sample_rate != 16000:
-            resampler = torchaudio.transforms.Resample(sample_rate, 16000)
-            waveform = resampler(waveform)
-            sample_rate = 16000
-            logger.debug(
-                f"Request {request_id} [{file.filename}] - Resampled to 16kHz"
-            )
-        
-        # Convert to mono if stereo
-        if waveform.shape[0] > 1:
-            waveform = torch.mean(waveform, dim=0, keepdim=True)
-            logger.debug(
-                f"Request {request_id} [{file.filename}] - Converted to mono"
-            )
-        
-        # Calculate duration
-        duration = str(round(waveform.shape[1] / sample_rate, 1))
+        logger.debug(f"Request {request_id} [{file.filename}] - Audio processed successfully")
         
         # Prepare input for model
         input_values = processor(
-            waveform.squeeze().numpy(),
+            waveform.numpy(),
             sampling_rate=16000,
             return_tensors="pt"
         ).input_values.to(device)
@@ -224,9 +169,6 @@ async def _process_asr_request(file: UploadFile, request_id: int, start_time: fl
         predicted_ids = torch.argmax(logits, dim=-1)
         transcription = processor.batch_decode(predicted_ids)[0]
         
-        # Clean up temporary file
-        os.unlink(temp_file_path)
-        
         total_time = time.time() - start_time
         logger.info(
             f"Request {request_id} [{file.filename}] completed in {total_time:.2f}s, duration: {duration}s"
@@ -238,20 +180,8 @@ async def _process_asr_request(file: UploadFile, request_id: int, start_time: fl
         }
         
     except HTTPException:
-        # Clean up temp file if it exists
-        if 'temp_file_path' in locals():
-            try:
-                os.unlink(temp_file_path)
-            except Exception:
-                pass
         raise
     except Exception as e:
-        # Clean up temp file if it exists
-        if 'temp_file_path' in locals():
-            try:
-                os.unlink(temp_file_path)
-            except Exception:
-                pass
         total_time = time.time() - start_time
         logger.error(
             f"Request {request_id} [{file.filename}] failed after {total_time:.2f}s - Error: {str(e)}",
@@ -263,70 +193,31 @@ async def _process_batch_request(files: List[UploadFile], request_id: int, start
     """Process batch ASR request with true batch inference."""
     logger.info(f"Processing batch {request_id} with {len(files)} files using batch inference")
     
-    # Step 1: Load and preprocess all audio files
+    # Step 1: Load and preprocess all audio files using shared function
     waveforms = []
     file_info = []
-    temp_files = []
     
     for i, file in enumerate(files):
-        file_start_time = time.time()
-        temp_file_path = None
+        audio_result = await _process_audio_file(file, request_id)
         
-        try:
-            # Validate file format
-            if not file.filename or not file.filename.lower().endswith('.mp3'):
-                raise ValueError("Only MP3 audio files are supported")
-            
-            # Save to temporary file
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_file:
-                content = await file.read()
-                
-                # Check file size
-                if len(content) > MAX_FILE_SIZE:
-                    raise ValueError(f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)}MB")
-                
-                temp_file.write(content)
-                temp_file_path = temp_file.name
-                temp_files.append(temp_file_path)
-            
-            # Load audio
-            waveform, sample_rate = torchaudio.load(temp_file_path)
-            
-            # Validate audio
-            if waveform.size(0) == 0 or waveform.size(1) == 0:
-                raise ValueError("Empty or invalid audio data")
-            if sample_rate <= 0:
-                raise ValueError("Invalid sample rate")
-            
-            # Resample to 16kHz if needed
-            if sample_rate != 16000:
-                resampler = torchaudio.transforms.Resample(sample_rate, 16000)
-                waveform = resampler(waveform)
-                sample_rate = 16000
-            
-            # Convert to mono if stereo
-            if waveform.shape[0] > 1:
-                waveform = torch.mean(waveform, dim=0, keepdim=True)
-            
+        if audio_result["status"] == "success":
             # Store processed waveform and metadata
-            waveforms.append(waveform.squeeze(0))  # Remove channel dimension for batching
+            waveforms.append(audio_result["waveform"])
             file_info.append({
                 "filename": file.filename,
-                "duration": round(waveform.shape[1] / sample_rate, 1),
-                "processing_time": round(time.time() - file_start_time, 2),
+                "duration": audio_result["duration"],
+                "processing_time": audio_result["processing_time"],
                 "status": "success"
             })
-            
             logger.debug(f"Batch {request_id} - File {i+1}/{len(files)} [{file.filename}] loaded successfully")
-            
-        except Exception as e:
+        else:
             file_info.append({
                 "filename": file.filename or f"file_{i}",
                 "status": "error",
-                "error": str(e),
-                "processing_time": round(time.time() - file_start_time, 2)
+                "error": audio_result["error"],
+                "processing_time": audio_result["processing_time"]
             })
-            logger.warning(f"Batch {request_id} - File {i+1}/{len(files)} [{file.filename}] failed to load: {str(e)}")
+            logger.warning(f"Batch {request_id} - File {i+1}/{len(files)} [{file.filename}] failed to load: {audio_result['error']}")
     
     # Step 2: Perform batch inference on valid waveforms
     transcriptions = []
@@ -396,19 +287,76 @@ async def _process_batch_request(files: List[UploadFile], request_id: int, start
             })
             transcription_idx += 1
     
-    # Step 4: Clean up temporary files
-    for temp_file_path in temp_files:
-        try:
-            os.unlink(temp_file_path)
-        except Exception:
-            pass  # Ignore cleanup errors
-    
     # Log final results
     total_time = time.time() - start_time
     successful = sum(1 for r in results if r["status"] == "success")
     logger.info(f"Batch request {request_id} completed in {total_time:.2f}s - {successful}/{len(files)} successful")
     
     return {"results": results}
+
+async def _process_audio_file(file: UploadFile, request_id: int) -> Dict[str, Any]:
+    """Process a single audio file and return waveform data or error info."""
+    file_start_time = time.time()
+    temp_file_path = None
+    
+    try:
+        # Validate file format
+        if not file.filename or not file.filename.lower().endswith('.mp3'):
+            raise ValueError("Only MP3 audio files are supported")
+        
+        # Save to temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_file:
+            content = await file.read()
+            
+            # Check file size
+            if len(content) > MAX_FILE_SIZE:
+                raise ValueError(f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)}MB")
+            
+            temp_file.write(content)
+            temp_file_path = temp_file.name
+        
+        # Load audio
+        waveform, sample_rate = torchaudio.load(temp_file_path)
+        
+        # Validate audio
+        if waveform.size(0) == 0 or waveform.size(1) == 0:
+            raise ValueError("Empty or invalid audio data")
+        if sample_rate <= 0:
+            raise ValueError("Invalid sample rate")
+        
+        # Resample to 16kHz if needed
+        if sample_rate != 16000:
+            resampler = torchaudio.transforms.Resample(sample_rate, 16000)
+            waveform = resampler(waveform)
+            sample_rate = 16000
+        
+        # Convert to mono if stereo
+        if waveform.shape[0] > 1:
+            waveform = torch.mean(waveform, dim=0, keepdim=True)
+        
+        # Clean up temp file
+        os.unlink(temp_file_path)
+        
+        return {
+            "status": "success",
+            "waveform": waveform.squeeze(0),  # Remove channel dimension
+            "duration": round(waveform.shape[1] / sample_rate, 1),
+            "processing_time": round(time.time() - file_start_time, 2)
+        }
+        
+    except Exception as e:
+        # Clean up temp file if it exists
+        if temp_file_path:
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+        
+        return {
+            "status": "error", 
+            "error": str(e),
+            "processing_time": round(time.time() - file_start_time, 2)
+        }
 
 async def _run_inference(input_values: torch.Tensor) -> torch.Tensor:
     with torch.no_grad():
