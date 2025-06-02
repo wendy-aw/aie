@@ -1,10 +1,15 @@
 #!/bin/bash
 
-# Set default values
+# Load environment variables from .env file
+set -a
+source .env
+set +a
+
+# Set fallback defaults (in case .env is missing)
 HOST=${HOST:-"0.0.0.0"}
 PORT=${PORT:-8001}
 
-# Get number of CPU cores and set workers to 2 * CPU_CORES + 1
+# If workers is not set in .env, get number of CPU cores and set workers to 2 * CPU_CORES + 1
 if command -v nproc >/dev/null 2>&1; then
   CPU_CORES=$(nproc)
 else
