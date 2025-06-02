@@ -3,7 +3,14 @@
 # Set default values
 HOST=${HOST:-"0.0.0.0"}
 PORT=${PORT:-8001}
-WORKERS=${WORKERS:-$((2 * $(nproc) + 1))}
+
+# Get number of CPU cores and set workers to 2 * CPU_CORES + 1
+if command -v nproc >/dev/null 2>&1; then
+  CPU_CORES=$(nproc)
+else
+  CPU_CORES=$(sysctl -n hw.ncpu)
+fi
+WORKERS=${WORKERS:-$((2 * CPU_CORES + 1))}
 
 echo "Starting ASR API server..."
 echo "Host: $HOST"

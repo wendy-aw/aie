@@ -20,14 +20,18 @@ from typing import Dict, List, Any, Optional
 from concurrent.futures import ThreadPoolExecutor
 import argparse
 from tqdm.asyncio import tqdm
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configuration
-API_BASE_URL = f"http://localhost:{os.getenv('PORT', 8001)}" # ASR API base URL
-DATA_FOLDER = "cv-valid-dev" # Folder containing MP3 files
-INPUT_CSV = "cv-valid-dev.csv" # Input CSV file with audio filenames
-OUTPUT_CSV = "cv-valid-dev-updated.csv" # Output CSV file with transcriptions
-RETRY_ATTEMPTS = 3
-RETRY_DELAY = 1  # seconds
+API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:8001') # ASR API base URL
+DATA_FOLDER = os.getenv('DATA_FOLDER', 'cv-valid-dev')
+INPUT_CSV = os.getenv('INPUT_CSV', 'cv-valid-dev.csv')
+OUTPUT_CSV = os.getenv('OUTPUT_CSV', 'cv-valid-dev-updated.csv')
+RETRY_ATTEMPTS = int(os.getenv('RETRY_ATTEMPTS', 3))
+RETRY_DELAY = int(os.getenv('RETRY_DELAY', 1))  # seconds
 
 # Calculate optimal concurrency based on API workers
 API_WORKERS = int(os.getenv('WORKERS', '1'))
