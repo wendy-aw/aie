@@ -32,6 +32,7 @@ RETRY_DELAY = 1  # seconds
 # Calculate optimal concurrency based on API workers
 API_WORKERS = int(os.getenv('WORKERS', '1'))
 DEFAULT_CONCURRENT = API_WORKERS * 2 if API_WORKERS > 1 else 2  # 2x workers or min 2
+DEFAULT_BATCH_SIZE = 5  # Process files in batches for better efficiency
 
 # Configure logging
 logging.basicConfig(
@@ -62,158 +63,226 @@ async def check_api_health() -> bool:
         return False
 
 
-async def transcribe_file(session: aiohttp.ClientSession, file_path: Path) -> Dict[str, Any]:
-    """Transcribe a single MP3 file using the ASR API."""
-    file_name = file_path.name
+async def transcribe_batch(session: aiohttp.ClientSession, file_paths: List[Path], batch_id: int) -> List[Dict[str, Any]]:
+    """Transcribe multiple MP3 files using the ASR batch API."""
     start_time = time.time()
+    batch_size = len(file_paths)
     
     for attempt in range(RETRY_ATTEMPTS):
         try:
-            async with aiofiles.open(file_path, 'rb') as f:
-                file_content = await f.read()
-            
-            # Prepare multipart form data
+            # Prepare multipart form data for batch
             data = aiohttp.FormData()
-            data.add_field('file', 
-                          file_content, 
-                          filename=file_name, 
-                          content_type='audio/mpeg')
+            file_info = []
             
-            # Make API request
-            async with session.post(API_BASE_URL + "/asr", data=data, timeout=120) as response:
+            # Load all files in the batch
+            for file_path in file_paths:
+                try:
+                    async with aiofiles.open(file_path, 'rb') as f:
+                        file_content = await f.read()
+                        data.add_field('files', 
+                                      file_content, 
+                                      filename=file_path.name, 
+                                      content_type='audio/mpeg')
+                        file_info.append((file_path.name, True))
+                except Exception as e:
+                    # File couldn't be read
+                    file_info.append((file_path.name, False, str(e)))
+            
+            # Make batch API request
+            timeout = aiohttp.ClientTimeout(total=120 * batch_size)  # Scale timeout with batch size
+            async with session.post(API_BASE_URL + "/asr", data=data, timeout=timeout) as response:
                 if response.status == 200:
-                    result = await response.json()
+                    batch_result = await response.json()
                     duration = time.time() - start_time
                     
-                    return {
-                        "file": file_name,
-                        "status": "success",
-                        "transcription": result.get("transcription", ""),
-                        "audio_duration": result.get("duration", ""),
-                        "processing_time": round(duration, 2),
-                        "attempt": attempt + 1
-                    }
+                    # Process batch results
+                    results = []
+                    if "results" in batch_result:
+                        # Batch response format
+                        for result in batch_result["results"]:
+                            results.append({
+                                "file": result.get("filename", "unknown"),
+                                "status": result.get("status", "error"),
+                                "transcription": result.get("transcription", ""),
+                                "audio_duration": result.get("duration", ""),
+                                "processing_time": result.get("processing_time", round(duration, 2)),
+                                "attempt": attempt + 1
+                            })
+                    else:
+                        # Single file response format (fallback)
+                        results.append({
+                            "file": file_paths[0].name if file_paths else "unknown",
+                            "status": "success",
+                            "transcription": batch_result.get("transcription", ""),
+                            "audio_duration": batch_result.get("duration", ""),
+                            "processing_time": round(duration, 2),
+                            "attempt": attempt + 1
+                        })
+                    
+                    # Add any files that couldn't be read
+                    for file_name, success, *error in file_info:
+                        if not success:
+                            results.append({
+                                "file": file_name,
+                                "status": "error",
+                                "transcription": "",
+                                "error": error[0] if error else "File read error",
+                                "processing_time": round(time.time() - start_time, 2),
+                                "attempt": attempt + 1
+                            })
+                    
+                    return results
+                    
                 else:
                     error_text = await response.text()
-                    logger.warning(f"✗ {file_name} failed (attempt {attempt + 1}): {response.status} - {error_text}")
                     
                     if attempt == RETRY_ATTEMPTS - 1:
-                        return {
-                            "file": file_name,
-                            "status": "error",
-                            "transcription": "",  # Empty transcription for failed files
-                            "error": f"HTTP {response.status}: {error_text}",
-                            "processing_time": round(time.time() - start_time, 2),
-                            "attempts": RETRY_ATTEMPTS
-                        }
+                        # Return error for all files in batch
+                        results = []
+                        for file_path in file_paths:
+                            results.append({
+                                "file": file_path.name,
+                                "status": "error",
+                                "transcription": "",
+                                "error": f"HTTP {response.status}: {error_text}",
+                                "processing_time": round(time.time() - start_time, 2),
+                                "attempts": RETRY_ATTEMPTS
+                            })
+                        return results
                     
                     await asyncio.sleep(RETRY_DELAY * (attempt + 1))
                     
         except asyncio.TimeoutError:
-            logger.warning(f"✗ {file_name} timeout (attempt {attempt + 1})")
             if attempt == RETRY_ATTEMPTS - 1:
-                return {
-                    "file": file_name,
-                    "status": "error",
-                    "transcription": "",  # Empty transcription for failed files
-                    "error": "Request timeout",
-                    "processing_time": round(time.time() - start_time, 2),
-                    "attempts": RETRY_ATTEMPTS
-                }
+                results = []
+                for file_path in file_paths:
+                    results.append({
+                        "file": file_path.name,
+                        "status": "error",
+                        "transcription": "",
+                        "error": "Request timeout",
+                        "processing_time": round(time.time() - start_time, 2),
+                        "attempts": RETRY_ATTEMPTS
+                    })
+                return results
             await asyncio.sleep(RETRY_DELAY * (attempt + 1))
             
         except Exception as e:
-            logger.error(f"✗ {file_name} error (attempt {attempt + 1}): {str(e)}")
             if attempt == RETRY_ATTEMPTS - 1:
-                return {
-                    "file": file_name,
-                    "status": "error",
-                    "transcription": "",  # Empty transcription for failed files
-                    "error": str(e),
-                    "processing_time": round(time.time() - start_time, 2),
-                    "attempts": RETRY_ATTEMPTS
-                }
+                results = []
+                for file_path in file_paths:
+                    results.append({
+                        "file": file_path.name,
+                        "status": "error",
+                        "transcription": "",
+                        "error": str(e),
+                        "processing_time": round(time.time() - start_time, 2),
+                        "attempts": RETRY_ATTEMPTS
+                    })
+                return results
             await asyncio.sleep(RETRY_DELAY * (attempt + 1))
 
 
-async def process_files_batch(mp3_filenames: List[str], folder_path: Path, concurrent: int) -> Dict[str, str]:
-    """Process MP3 file names from CSV and return transcription results."""
+async def process_files_batch(mp3_filenames: List[str], folder_path: Path, concurrent: int, batch_size: int = DEFAULT_BATCH_SIZE) -> Dict[str, str]:
+    """Process MP3 file names from CSV using batch API requests."""
     connector = aiohttp.TCPConnector(limit=concurrent)
-    timeout = aiohttp.ClientTimeout(total=300)  # 5 minutes
+    timeout = aiohttp.ClientTimeout(total=600)  # Longer timeout for batch requests
     
     transcriptions = {}
     success_count = 0
     
+    # Split files into batches
+    file_batches = []
+    for i in range(0, len(mp3_filenames), batch_size):
+        batch_files = mp3_filenames[i:i+batch_size]
+        batch_paths = [folder_path / filename for filename in batch_files]
+        file_batches.append((i // batch_size, batch_paths))
+    
+    logger.info(f"Processing {len(mp3_filenames)} files in {len(file_batches)} batches of size {batch_size}")
+    
     async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-        # Create semaphore to limit concurrent requests
+        # Create semaphore to limit concurrent batch requests
         semaphore = asyncio.Semaphore(concurrent)
         
         # Progress bar setup
         progress_bar = tqdm(
             total=len(mp3_filenames), 
-            desc="Transcribing files",
+            desc="Transcribing batches",
             unit="file",
             dynamic_ncols=True,
             colour="green"
         )
         
-        async def process_with_semaphore_and_progress(file_name: str):
+        async def process_batch_with_semaphore(batch_id: int, file_paths: List[Path]):
             nonlocal success_count
             async with semaphore:
-                file_path = folder_path / file_name
+                # Filter existing files
+                existing_files = []
+                missing_files = []
                 
-                if file_path.exists():
-                    result = await transcribe_file(session, file_path)
-                else: 
-                    logger.warning(f"File not found: {file_name}")
-                    result = {
-                        "file": file_name,
+                for file_path in file_paths:
+                    if file_path.exists():
+                        existing_files.append(file_path)
+                    else:
+                        missing_files.append(file_path)
+                
+                batch_results = []
+                
+                # Process existing files with batch API
+                if existing_files:
+                    batch_results = await transcribe_batch(session, existing_files, batch_id)
+                
+                # Add missing files as errors
+                for missing_file in missing_files:
+                    batch_results.append({
+                        "file": missing_file.name,
                         "status": "error",
                         "transcription": "",
                         "error": "File not found"
-                    }
-                
-                # Update progress bar
-                progress_bar.update(1)
-                
-                # Update success counter and progress bar description
-                if result["status"] == "success":
-                    success_count += 1
-                    progress_bar.set_postfix({
-                        "Success": f"{success_count}/{progress_bar.n}",
-                        "Current": result["file"][:20] + "..." if len(result["file"]) > 20 else result["file"]
-                    })
-                else:
-                    progress_bar.set_postfix({
-                        "Success": f"{success_count}/{progress_bar.n}",
-                        "Error": result["file"][:20] + "..." if len(result["file"]) > 20 else result["file"]
                     })
                 
-                return result
+                # Update progress and success count
+                batch_success_count = 0
+                for result in batch_results:
+                    if result["status"] == "success":
+                        batch_success_count += 1
+                        success_count += 1
+                    
+                    # Update progress bar
+                    progress_bar.update(1)
+                    progress_bar.set_postfix({
+                        "Success": f"{success_count}/{progress_bar.n}",
+                        "Batch": f"{batch_id+1}/{len(file_batches)}"
+                    })
+                
+                return batch_results
         
-        # Process all files concurrently (semaphore controls actual concurrency)
-        tasks = [process_with_semaphore_and_progress(file_name) for file_name in mp3_filenames]
+        # Process all batches concurrently
+        batch_tasks = [
+            process_batch_with_semaphore(batch_id, file_paths) 
+            for batch_id, file_paths in file_batches
+        ]
         
         try:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            batch_results_list = await asyncio.gather(*batch_tasks, return_exceptions=True)
             
-            # Store results
+            # Flatten results and store transcriptions
             error_count = 0
             
-            for result in results:
-                if isinstance(result, Exception):
-                    logger.error(f"Task error: {result}")
+            for batch_results in batch_results_list:
+                if isinstance(batch_results, Exception):
+                    logger.error(f"Batch processing error: {batch_results}")
                     error_count += 1
                 else:
-                    transcriptions[result["file"]] = result["transcription"]
-                    
-                    if result["status"] != "success":
-                        error_count += 1
+                    for result in batch_results:
+                        transcriptions[result["file"]] = result["transcription"]
+                        if result["status"] != "success":
+                            error_count += 1
         
         finally:
             progress_bar.close()
     
-    logger.info(f"Transcription completed: {success_count}/{len(mp3_filenames)} successful, {error_count} errors")
+    logger.info(f"Batch transcription completed: {success_count}/{len(mp3_filenames)} successful, {error_count} errors")
     return transcriptions
 
 
@@ -292,6 +361,7 @@ async def main():
     parser.add_argument("--folder", default=DATA_FOLDER, help="Folder containing MP3 files")
     parser.add_argument("--output", default=OUTPUT_CSV, help="Output CSV file with transcriptions")
     parser.add_argument("--concurrent", type=int, default=DEFAULT_CONCURRENT, help=f"Max concurrent requests (default: {DEFAULT_CONCURRENT} based on {API_WORKERS} API workers)")
+    parser.add_argument("--batch_size", type=int, default=DEFAULT_BATCH_SIZE, help=f"Number of files per batch (default: {DEFAULT_BATCH_SIZE})")
     parser.add_argument("--n_files", type=int, help="Limit number of files to process")
     
     args = parser.parse_args()
@@ -300,6 +370,7 @@ async def main():
     logger.info(f"Audio folder: {args.folder}")
     logger.info(f"Output CSV: {args.output}")
     logger.info(f"Max concurrent requests: {args.concurrent}")
+    logger.info(f"Batch size: {args.batch_size}")
     if args.n_files:
         logger.info(f"Limiting to {args.n_files} files")
     
@@ -334,7 +405,7 @@ async def main():
         return 1
     
     logger.info(f"Starting transcription of {len(mp3_filenames)} files...")
-    transcriptions = await process_files_batch(mp3_filenames, folder_path, args.concurrent)
+    transcriptions = await process_files_batch(mp3_filenames, folder_path, args.concurrent, args.batch_size)
     
     # Save updated CSV
     try:
