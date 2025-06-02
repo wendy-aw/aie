@@ -1,6 +1,13 @@
+# ASR API dependencies
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 torch>=2.6.0
 torchaudio>=2.6.0
 transformers>=4.52.0
 python-multipart>=0.0.6
+
+# CV-Decode dependencies
+aiofiles>=24.1.0
+aiohttp>=3.12.6
+pandas>=2.2.3
+tqdm>=4.67.1
