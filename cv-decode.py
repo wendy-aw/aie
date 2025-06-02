@@ -365,6 +365,15 @@ async def main():
     parser.add_argument("--n_files", type=int, help="Limit number of files to process")
     
     args = parser.parse_args()
+    
+    # Validate arguments
+    if args.batch_size <= 0:
+        logger.error("batch_size must be greater than 0")
+        return 1
+    if args.n_files is not None and args.n_files <= 0:
+        logger.error("n_files must be greater than 0")
+        return 1
+    
     logger.info("Starting Common Voice CSV transcription process")
     logger.info(f"Input CSV: {args.csv}")
     logger.info(f"Audio folder: {args.folder}")
