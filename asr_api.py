@@ -97,6 +97,26 @@ async def asr_transcribe(file: UploadFile = File(...)):
 async def _process_asr_request(file: UploadFile, request_id: int, start_time: float):
     """Process ASR request with timeout and temporary file handling."""
     try:
+        # Validate file format - only MP3 allowed
+        if not file.filename or not file.filename.lower().endswith('.mp3'):
+            logger.warning(
+                f"Request {request_id} [{file.filename}] - Invalid file format. Only MP3 files are supported."
+            )
+            raise HTTPException(
+                status_code=415,
+                detail="Only MP3 audio files are supported"
+            )
+        
+        # Validate content type
+        if file.content_type and not file.content_type.startswith('audio/'):
+            logger.warning(
+                f"Request {request_id} [{file.filename}] - Invalid content type: {file.content_type}"
+            )
+            raise HTTPException(
+                status_code=415,
+                detail="File must be an audio file"
+            )
+        
         # Save uploaded file to temporary location
         with tempfile.NamedTemporaryFile(
             delete=False, suffix='.mp3'
@@ -122,7 +142,26 @@ async def _process_asr_request(file: UploadFile, request_id: int, start_time: fl
         )
         
         # Load audio with torchaudio
-        waveform, sample_rate = torchaudio.load(temp_file_path)
+        try:
+            waveform, sample_rate = torchaudio.load(temp_file_path)
+            # Validate audio properties
+            if waveform.size(0) == 0 or waveform.size(1) == 0:
+                raise ValueError("Empty or invalid audio data")
+            if sample_rate <= 0:
+                raise ValueError("Invalid sample rate")
+        except RuntimeError as e:
+            logger.warning(
+                f"Request {request_id} [{file.filename}] - Failed to load audio: {str(e)}"
+            )
+            if "file format" in str(e).lower():
+                raise HTTPException(status_code=415, detail="Unsupported audio format")
+            raise HTTPException(status_code=422, detail="Failed to decode audio file")
+        except Exception as e:
+            logger.warning(
+                f"Request {request_id} [{file.filename}] - Corrupted audio file: {str(e)}"
+            )
+            raise HTTPException(status_code=422, detail="Corrupted or invalid audio file")
+        
         logger.debug(
             f"Request {request_id} [{file.filename}] - Audio loaded, sample_rate: {sample_rate}"
         )
