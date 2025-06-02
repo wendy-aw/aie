@@ -85,8 +85,6 @@ async def transcribe_file(session: aiohttp.ClientSession, file_path: Path) -> Di
                     result = await response.json()
                     duration = time.time() - start_time
                     
-                    logger.info(f"✓ {file_name} transcribed in {duration:.2f}s")
-                    
                     return {
                         "file": file_name,
                         "status": "success",
