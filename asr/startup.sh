@@ -1,9 +1,11 @@
 #!/bin/bash
 
-# Load environment variables from .env file
-set -a
-source .env
-set +a
+# Load environment variables from .env file if it exists
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
 
 # Set fallback defaults (in case .env is missing)
 HOST=${HOST:-"0.0.0.0"}

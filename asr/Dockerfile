@@ -26,6 +26,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY asr_api.py .
 COPY startup.sh .
 
+# Create logs directory
+RUN mkdir -p logs
+
 # Make startup script executable
 RUN chmod +x startup.sh
 
@@ -36,8 +39,8 @@ RUN useradd --create-home --shell /bin/bash asr-user && \
 # Switch to non-root user
 USER asr-user
 
-# Expose port (will be set by environment variable)
-EXPOSE ${PORT}
+# Expose port (default to 8001 if PORT not set)
+EXPOSE ${PORT:-8001}
 
 # Use startup script as entrypoint
 CMD ["./startup.sh"]
