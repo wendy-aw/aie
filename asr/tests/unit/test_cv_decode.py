@@ -81,14 +81,10 @@ class TestBatchTranscription:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_transcribe_batch_multipart_form_data(self, batch_audio_files: list[Path]):
+    async def test_transcribe_batch_multipart_form_data(self, batch_audio_files: list[Path], mock_http_session):
         """Test that batch transcription creates proper multipart form data."""
-        mock_session = AsyncMock()
-        
-        # Mock successful API response
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={
+        # Create mock session with successful batch response
+        batch_response_json = {
             "results": [
                 {
                     "filename": f.name,
@@ -99,42 +95,39 @@ class TestBatchTranscription:
                 }
                 for f in batch_audio_files
             ]
-        })
+        }
         
-        mock_session.post.return_value.__aenter__.return_value = mock_response
+        mock_session = mock_http_session(response_status=200, response_json=batch_response_json)
         
         result = await cv_decode.transcribe_batch(mock_session, batch_audio_files)
         
-        # Verify the API was called with the correct URL (may be called multiple times for batches)
-        assert mock_session.post.call_count >= 1
-        call_args = mock_session.post.call_args_list[0]
-        assert f"{cv_decode.API_BASE_URL}/asr" in call_args[0][0]
+        # Verify the API was called with the correct URL
+        assert mock_session.post_called_with is not None
+        url, kwargs = mock_session.post_called_with
+        assert f"{cv_decode.API_BASE_URL}/asr" in url
         
         # Verify the form data contains files
-        assert 'data' in call_args[1]
+        assert 'data' in kwargs
         
         assert len(result) == len(batch_audio_files)
         assert all(r["status"] == "success" for r in result)
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_transcribe_batch_retry_on_server_error(self, batch_audio_files: list[Path]):
+    async def test_transcribe_batch_retry_on_server_error(self, batch_audio_files: list[Path], mock_http_session):
         """Test retry behavior on server errors."""
-        mock_session = AsyncMock()
-        
-        # First call fails with 500, second succeeds
-        error_response = AsyncMock()
-        error_response.status = 500
-        error_response.text = AsyncMock(return_value="Internal Server Error")
-        
-        success_response = AsyncMock()
-        success_response.status = 200
-        success_response.json = AsyncMock(return_value={
+        # Create mock session with sequence: first call fails (500), second succeeds (200)
+        success_response_json = {
             "results": [{"filename": f.name, "status": "success", "transcription": "test"} 
                        for f in batch_audio_files]
-        })
+        }
         
-        mock_session.post.return_value.__aenter__.side_effect = [error_response, success_response]
+        response_sequence = [
+            (500, {}, None),  # First call fails with 500
+            (200, success_response_json, None)  # Second call succeeds
+        ]
+        
+        mock_session = mock_http_session(response_sequence=response_sequence)
         
         with patch('asyncio.sleep'):  # Speed up the test by mocking sleep
             result = await cv_decode.transcribe_batch(mock_session, batch_audio_files)
@@ -144,7 +137,7 @@ class TestBatchTranscription:
         # Check that we have some successful results (not all may be successful due to error handling)
         successful_results = [r for r in result if r["status"] == "success"]
         assert len(successful_results) > 0
-        assert mock_session.post.call_count == 2
+        assert mock_session.call_count == 2
 
 
 class TestCSVProcessing:
@@ -239,7 +232,7 @@ class TestBatchProcessing:
         mp3_filenames = [f.name for f in batch_audio_files]
         
         # Mock only the transcribe_batch function to return realistic responses
-        with patch('cv_decode.transcribe_batch') as mock_transcribe:
+        with patch.object(cv_decode, 'transcribe_batch') as mock_transcribe:
             mock_transcribe.return_value = [
                 {
                     "file": filename,
@@ -286,7 +279,7 @@ class TestBatchProcessing:
         
         mp3_filenames = [f.name for f in batch_audio_files]
         
-        with patch('cv_decode.transcribe_batch') as mock_transcribe:
+        with patch.object(cv_decode, 'transcribe_batch') as mock_transcribe:
             # Return empty list to simulate failed API calls
             mock_transcribe.return_value = []
             
@@ -298,8 +291,8 @@ class TestBatchProcessing:
             call_count = mock_transcribe.call_count
             assert call_count > 0
             
-            # Should have empty transcriptions since API "failed"
-            assert all(transcriptions[filename] == "" for filename in mp3_filenames)
+            # Should have no transcriptions since API "failed" (returned empty list)
+            assert len(transcriptions) == 0
 
 
 class TestMainFunction:
@@ -350,7 +343,7 @@ class TestMainFunction:
         csv_file.write_text(sample_csv_file.read_text())
         
         # Test with unhealthy API
-        with patch('cv_decode.check_api_health', return_value=False), \
+        with patch.object(cv_decode, 'check_api_health', return_value=False), \
              patch('sys.argv', ['cv-decode.py', '--csv', str(csv_file)]):
             
             result = await cv_decode.main()
@@ -358,7 +351,7 @@ class TestMainFunction:
             
         # Test with missing folder (API healthy this time)
         missing_folder = temp_dir / "missing_folder"
-        with patch('cv_decode.check_api_health', return_value=True), \
+        with patch.object(cv_decode, 'check_api_health', return_value=True), \
              patch('sys.argv', ['cv-decode.py', '--csv', str(csv_file), '--folder', str(missing_folder)]):
             
             result = await cv_decode.main()
