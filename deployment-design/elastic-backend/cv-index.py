@@ -205,6 +205,9 @@ def main():
         
         # Verify indexing
         verify_indexing(es, args.index_name)
+
+        # Close Elasticsearch client
+        es.close()
         
         logging.info("Indexing completed successfully!")
         
