@@ -4,8 +4,10 @@ Performance and load tests for ASR API.
 import pytest
 import asyncio
 import time
+import torch
 from httpx import AsyncClient
 from pathlib import Path
+from unittest.mock import patch
 
 
 class TestPerformance:
@@ -13,15 +15,14 @@ class TestPerformance:
 
     @pytest.mark.slow
     @pytest.mark.asyncio
-    async def test_single_file_response_time(self, async_client: AsyncClient, sample_audio_file: Path, mock_processor_and_model):
+    async def test_single_file_response_time(self, async_client: AsyncClient, sample_audio_file: Path):
         """Test single file transcription response time."""
-        mock_processor, mock_model = mock_processor_and_model
         
         with open(sample_audio_file, 'rb') as f:
             files = {'file': ('test.mp3', f, 'audio/mpeg')}
             
-            with pytest.patch('asr_api.torchaudio.load') as mock_load:
-                mock_load.return_value = (pytest.torch.randn(1, 32000), 16000)
+            with patch('asr_api.torchaudio.load') as mock_load:
+                mock_load.return_value = (torch.randn(1, 32000), 16000)
                 
                 start_time = time.time()
                 response = await async_client.post("/asr", files=files)
@@ -36,9 +37,8 @@ class TestPerformance:
 
     @pytest.mark.slow
     @pytest.mark.asyncio
-    async def test_batch_processing_efficiency(self, async_client: AsyncClient, batch_audio_files: list[Path], mock_processor_and_model):
+    async def test_batch_processing_efficiency(self, async_client: AsyncClient, batch_audio_files: list[Path]):
         """Test that batch processing is more efficient than individual requests."""
-        mock_processor, mock_model = mock_processor_and_model
         
         # Time individual requests
         individual_start = time.time()
@@ -48,8 +48,8 @@ class TestPerformance:
             with open(audio_file, 'rb') as f:
                 files = {'file': (audio_file.name, f, 'audio/mpeg')}
                 
-                with pytest.patch('asr_api.torchaudio.load') as mock_load:
-                    mock_load.return_value = (pytest.torch.randn(1, 16000), 16000)
+                with patch('asr_api.torchaudio.load') as mock_load:
+                    mock_load.return_value = (torch.randn(1, 16000), 16000)
                     
                     response = await async_client.post("/asr", files=files)
                     individual_responses.append(response)
@@ -65,8 +65,8 @@ class TestPerformance:
             with open(audio_file, 'rb') as f:
                 files.append(('files', (audio_file.name, f.read(), 'audio/mpeg')))
         
-        with pytest.patch('asr_api.torchaudio.load') as mock_load:
-            mock_load.return_value = (pytest.torch.randn(1, 16000), 16000)
+        with patch('asr_api.torchaudio.load') as mock_load:
+            mock_load.return_value = (torch.randn(1, 16000), 16000)
             
             batch_response = await async_client.post("/asr", files=files)
         
@@ -86,16 +86,15 @@ class TestPerformance:
 
     @pytest.mark.slow
     @pytest.mark.asyncio
-    async def test_concurrent_request_handling(self, async_client: AsyncClient, sample_audio_file: Path, mock_processor_and_model):
+    async def test_concurrent_request_handling(self, async_client: AsyncClient, sample_audio_file: Path):
         """Test handling of multiple concurrent requests."""
-        mock_processor, mock_model = mock_processor_and_model
         
         async def make_request(request_id: int):
             with open(sample_audio_file, 'rb') as f:
                 files = {'file': (f'test_{request_id}.mp3', f, 'audio/mpeg')}
                 
-                with pytest.patch('asr_api.torchaudio.load') as mock_load:
-                    mock_load.return_value = (pytest.torch.randn(1, 32000), 16000)
+                with patch('asr_api.torchaudio.load') as mock_load:
+                    mock_load.return_value = (torch.randn(1, 32000), 16000)
                     
                     start_time = time.time()
                     response = await async_client.post("/asr", files=files)
@@ -128,12 +127,10 @@ class TestPerformance:
         assert total_time < num_requests * 3  # Not more than 3s per request on average
 
     @pytest.mark.slow
-    def test_memory_usage_stability(self, client, sample_audio_file: Path, mock_processor_and_model):
+    def test_memory_usage_stability(self, client, sample_audio_file: Path):
         """Test that memory usage remains stable over multiple requests."""
         import psutil
         import os
-        
-        mock_processor, mock_model = mock_processor_and_model
         
         process = psutil.Process(os.getpid())
         initial_memory = process.memory_info().rss / 1024 / 1024  # MB
@@ -145,8 +142,8 @@ class TestPerformance:
             with open(sample_audio_file, 'rb') as f:
                 files = {'file': (f'test_{i}.mp3', f, 'audio/mpeg')}
                 
-                with pytest.patch('asr_api.torchaudio.load') as mock_load:
-                    mock_load.return_value = (pytest.torch.randn(1, 32000), 16000)
+                with patch('asr_api.torchaudio.load') as mock_load:
+                    mock_load.return_value = (torch.randn(1, 32000), 16000)
                     
                     response = client.post("/asr", files=files)
                     assert response.status_code == 200
@@ -209,9 +206,8 @@ class TestScalability:
 
     @pytest.mark.slow
     @pytest.mark.asyncio
-    async def test_batch_size_scaling(self, async_client: AsyncClient, batch_audio_files: list[Path], mock_processor_and_model):
+    async def test_batch_size_scaling(self, async_client: AsyncClient, batch_audio_files: list[Path]):
         """Test how performance scales with batch size."""
-        mock_processor, mock_model = mock_processor_and_model
         
         batch_sizes = [1, 2, 3]
         results = {}
@@ -223,8 +219,8 @@ class TestScalability:
                 with open(audio_file, 'rb') as f:
                     files.append(('files', (f'test_{i}.mp3', f.read(), 'audio/mpeg')))
             
-            with pytest.patch('asr_api.torchaudio.load') as mock_load:
-                mock_load.return_value = (pytest.torch.randn(1, 16000), 16000)
+            with patch('asr_api.torchaudio.load') as mock_load:
+                mock_load.return_value = (torch.randn(1, 16000), 16000)
                 
                 start_time = time.time()
                 response = await async_client.post("/asr", files=files)
@@ -251,9 +247,8 @@ class TestStressTest:
 
     @pytest.mark.slow
     @pytest.mark.asyncio
-    async def test_rapid_sequential_requests(self, async_client: AsyncClient, sample_audio_file: Path, mock_processor_and_model):
+    async def test_rapid_sequential_requests(self, async_client: AsyncClient, sample_audio_file: Path):
         """Test handling rapid sequential requests."""
-        mock_processor, mock_model = mock_processor_and_model
         
         num_requests = 20
         success_count = 0
@@ -263,8 +258,8 @@ class TestStressTest:
             with open(sample_audio_file, 'rb') as f:
                 files = {'file': (f'test_{i}.mp3', f, 'audio/mpeg')}
                 
-                with pytest.patch('asr_api.torchaudio.load') as mock_load:
-                    mock_load.return_value = (pytest.torch.randn(1, 32000), 16000)
+                with patch('asr_api.torchaudio.load') as mock_load:
+                    mock_load.return_value = (torch.randn(1, 32000), 16000)
                     
                     try:
                         response = await async_client.post("/asr", files=files)

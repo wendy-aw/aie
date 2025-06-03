@@ -179,10 +179,10 @@ class TestASREndpoint:
         with open(sample_audio_file, 'rb') as f:
             files = {'file': ('test.mp3', f, 'audio/mpeg')}
             
-            with patch('asr_api.torchaudio.load', side_effect=Exception("Audio processing failed")):
+            with patch('asr_api.torchaudio.load', side_effect=Exception("Failed to process audio file")):
                 response = await async_client.post("/asr", files=files)
         
-        assert response.status_code == 500
+        assert response.status_code == 422
 
     @pytest.mark.asyncio
     async def test_asr_endpoint_concurrent_requests(self, async_client: AsyncClient, sample_audio_file: Path):
