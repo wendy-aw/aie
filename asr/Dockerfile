@@ -10,10 +10,9 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies, ffmpeg for mp3 processing, libsndfile1 for torchaudio
+# Install system dependencies, ffmpeg for mp3 processing
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
