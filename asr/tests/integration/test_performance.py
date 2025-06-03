@@ -37,14 +37,14 @@ class TestPerformance:
 
     @pytest.mark.slow
     @pytest.mark.asyncio
-    async def test_batch_processing_efficiency(self, async_client: AsyncClient, batch_audio_files: list[Path]):
+    async def test_batch_processing_efficiency(self, async_client: AsyncClient, large_batch_audio_files: list[Path]):
         """Test that batch processing is more efficient than individual requests."""
         
         # Time individual requests
         individual_start = time.time()
         individual_responses = []
         
-        for audio_file in batch_audio_files:
+        for audio_file in large_batch_audio_files:
             with open(audio_file, 'rb') as f:
                 files = {'file': (audio_file.name, f, 'audio/mpeg')}
                 
@@ -61,7 +61,7 @@ class TestPerformance:
         batch_start = time.time()
         
         files = []
-        for audio_file in batch_audio_files:
+        for audio_file in large_batch_audio_files:
             with open(audio_file, 'rb') as f:
                 files.append(('files', (audio_file.name, f.read(), 'audio/mpeg')))
         
@@ -206,16 +206,16 @@ class TestScalability:
 
     @pytest.mark.slow
     @pytest.mark.asyncio
-    async def test_batch_size_scaling(self, async_client: AsyncClient, batch_audio_files: list[Path]):
+    async def test_batch_size_scaling(self, async_client: AsyncClient, large_batch_audio_files: list[Path]):
         """Test how performance scales with batch size."""
         
-        batch_sizes = [1, 2, 3]
+        batch_sizes = [1, 10, 20]
         results = {}
         
         for batch_size in batch_sizes:
             files = []
             for i in range(batch_size):
-                audio_file = batch_audio_files[i % len(batch_audio_files)]
+                audio_file = large_batch_audio_files[i % len(large_batch_audio_files)]
                 with open(audio_file, 'rb') as f:
                     files.append(('files', (f'test_{i}.mp3', f.read(), 'audio/mpeg')))
             
@@ -239,7 +239,11 @@ class TestScalability:
             print(f"Batch size {batch_size}: {processing_time:.2f}s total, {time_per_file:.2f}s per file")
         
         # Larger batches should be more efficient per file
-        assert results[3]['time_per_file'] <= results[1]['time_per_file'] * 1.5
+        # Compare the largest batch (20) to the smallest (1)
+        assert results[20]['time_per_file'] <= results[1]['time_per_file'] * 1.5
+        
+        # Also verify that medium batches show some efficiency gain
+        assert results[10]['time_per_file'] <= results[1]['time_per_file'] * 1.2
 
 
 class TestStressTest:

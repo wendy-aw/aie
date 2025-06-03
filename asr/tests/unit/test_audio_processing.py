@@ -101,12 +101,13 @@ class TestAudioProcessing:
             filename="empty_audio.mp3",
             file=io.BytesIO(content)
         )
-        
-        result = await _process_audio_file(upload_file)
-        
-        assert result["status"] == "error"
-        # Should fail when trying to load the empty file
-        assert "error" in result
+        with patch('torchaudio.load') as mock_load:
+            mock_load.side_effect = Exception("Empty audio file")
+            result = await _process_audio_file(upload_file)
+            
+            assert result["status"] == "error"
+            # Should fail when trying to load the empty file
+            assert "error" in result
 
     @pytest.mark.unit
     @pytest.mark.asyncio

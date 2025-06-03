@@ -209,6 +209,29 @@ def batch_audio_files(temp_dir: Path) -> list[Path]:
     return files
 
 
+@pytest.fixture
+def large_batch_audio_files(temp_dir: Path) -> list[Path]:
+    """Create 50 audio files for large batch testing."""
+    files = []
+    for i in range(50):
+        # Generate different frequency sine waves
+        sample_rate = 16000
+        duration = 1.0
+        frequency = 440 + (i * 50)  # Different frequencies
+        
+        t = torch.linspace(0, duration, int(sample_rate * duration))
+        audio = torch.sin(2 * torch.pi * frequency * t).unsqueeze(0)
+        
+        wav_file = temp_dir / f"test_audio_large_{i}.wav"
+        torchaudio.save(str(wav_file), audio, sample_rate)
+        
+        mp3_file = temp_dir / f"test_audio_large_{i}.mp3"
+        mp3_file.write_bytes(wav_file.read_bytes())
+        files.append(mp3_file)
+    
+    return files
+
+
 @pytest.fixture(autouse=True)
 def setup_test_logging():
     """Configure logging for tests."""
