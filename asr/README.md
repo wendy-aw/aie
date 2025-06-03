@@ -34,6 +34,23 @@ Add your audio files into the `cv-valid-dev` folder or change the `DATA_FOLDER` 
 
 #### Option 1: Local Deployment
 
+**Prerequisites:**
+- Python 3.8+
+- FFmpeg (required for audio processing)
+
+Install FFmpeg:
+```bash
+# macOS
+brew install ffmpeg
+
+# Ubuntu/Debian
+sudo apt update && sudo apt install ffmpeg
+
+# CentOS/RHEL
+sudo yum install ffmpeg
+```
+
+Start the server:
 ```bash
 # Make startup script executable
 chmod +x startup.sh
