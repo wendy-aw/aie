@@ -129,7 +129,7 @@ async def _process_asr_request(file: UploadFile, request_id: int, start_time: fl
     """Process ASR request with timeout and temporary file handling."""
     try:
         # Process audio file using shared function
-        audio_result = await _process_audio_file(file, request_id)
+        audio_result = await _process_audio_file(file)
         
         if audio_result["status"] == "error":
             error_msg = audio_result["error"]
@@ -198,7 +198,7 @@ async def _process_batch_request(files: List[UploadFile], request_id: int, start
     file_info = []
     
     for i, file in enumerate(files):
-        audio_result = await _process_audio_file(file, request_id)
+        audio_result = await _process_audio_file(file)
         
         if audio_result["status"] == "success":
             # Store processed waveform and metadata
@@ -294,7 +294,7 @@ async def _process_batch_request(files: List[UploadFile], request_id: int, start
     
     return {"results": results}
 
-async def _process_audio_file(file: UploadFile, request_id: int) -> Dict[str, Any]:
+async def _process_audio_file(file: UploadFile) -> Dict[str, Any]:
     """Process a single audio file and return waveform data or error info."""
     file_start_time = time.time()
     temp_file_path = None
