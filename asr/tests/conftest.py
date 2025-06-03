@@ -236,3 +236,68 @@ def mock_processor_and_model(mocker):
     mocker.patch('asr_api.model', mock_model)
     
     return mock_processor, mock_model
+
+
+class MockHttpResponse:
+    """Mock HTTP response for aiohttp tests."""
+    def __init__(self, status=200, json_data=None):
+        self.status = status
+        self._json_data = json_data or {}
+        
+    async def json(self):
+        return self._json_data
+    
+    async def text(self):
+        return "Mock response text"
+        
+    async def __aenter__(self):
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        return None
+
+
+class MockHttpSession:
+    """Mock HTTP session for aiohttp tests."""
+    def __init__(self, response_status=200, response_json=None, should_raise=None):
+        self.response_status = response_status
+        self.response_json = response_json or {}
+        self.should_raise = should_raise
+        self.get_called_with = None
+        self.post_called_with = None
+        
+    def get(self, url, **kwargs):
+        self.get_called_with = (url, kwargs)
+        if self.should_raise:
+            raise self.should_raise
+        return MockHttpResponse(self.response_status, self.response_json)
+        
+    def post(self, url, **kwargs):
+        self.post_called_with = (url, kwargs)
+        if self.should_raise:
+            raise self.should_raise
+        return MockHttpResponse(self.response_status, self.response_json)
+        
+    async def __aenter__(self):
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        return None
+
+
+@pytest.fixture
+def mock_http_session():
+    """Create a mock HTTP session for testing."""
+    return MockHttpSession
+
+
+@pytest.fixture
+def mock_successful_http_session():
+    """Create a mock HTTP session that returns successful responses."""
+    return MockHttpSession(response_status=200, response_json={"message": "pong"})
+
+
+@pytest.fixture
+def mock_failed_http_session():
+    """Create a mock HTTP session that returns error responses."""
+    return MockHttpSession(response_status=500)
