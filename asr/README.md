@@ -175,3 +175,102 @@ Set via `LOG_LEVEL` environment variable:
 - `INFO`: General operational messages
 - `WARNING`: Warning messages
 - `ERROR`: Error messages only
+
+## Testing
+
+The project includes comprehensive tests covering unit tests, integration tests, and performance tests.
+
+### Running Tests
+
+```bash
+# Install test dependencies
+pip install -r requirements.txt
+
+# Run all tests
+pytest
+
+# Run specific test categories
+pytest -m unit              # Unit tests only
+pytest -m integration       # Integration tests only
+pytest -m slow             # Performance/slow tests
+pytest -m "not slow"       # Skip slow tests
+
+# Run with coverage report
+pytest --cov=asr_api --cov=cv-decode --cov-report=html
+
+# Run specific test files
+pytest tests/unit/test_audio_processing.py
+pytest tests/integration/test_api_endpoints.py
+```
+
+### Test Structure
+
+```
+tests/
+├── conftest.py                     # Test configuration and fixtures
+├── fixtures/                      # Test data files
+│   └── test_data.csv
+├── unit/                          # Unit tests
+│   ├── test_audio_processing.py   # Audio processing functions
+│   └── test_cv_decode.py          # CV-decode functionality
+└── integration/                   # Integration tests
+    ├── test_api_endpoints.py      # API endpoint tests
+    ├── test_performance.py        # Performance tests
+    └── test_end_to_end.py         # End-to-end workflows
+```
+
+### Test Categories
+
+#### Unit Tests (`pytest -m unit`)
+- Audio processing functions
+- Input validation
+- Error handling
+- Configuration loading
+- CSV processing logic
+
+#### Integration Tests (`pytest -m integration`)
+- API endpoint functionality
+- Request/response handling
+- Error scenarios
+- Multi-file processing
+
+#### Performance Tests (`pytest -m slow`)
+- Response time benchmarks
+- Concurrent request handling
+- Memory usage stability
+- Batch processing efficiency
+- Scalability tests
+
+### Test Fixtures
+
+The test suite includes comprehensive fixtures:
+
+- **Audio Files**: Synthetic audio files for testing
+- **CSV Data**: Sample datasets for batch processing
+- **Mock Objects**: Mocked ML models for faster testing
+- **Temporary Directories**: Isolated test environments
+
+### Running Tests in CI/CD
+
+```bash
+# Fast test suite (excludes slow tests)
+pytest -m "not slow" --cov=asr_api --cov=cv-decode
+
+# Full test suite with performance tests
+pytest --cov=asr_api --cov=cv-decode --cov-report=xml
+```
+
+
+### Integration Test Requirements
+
+Some integration tests require:
+
+- **API Server Running**: For end-to-end tests
+- **Docker**: For container workflow tests
+- **Network Access**: For real API calls
+
+Skip these tests if dependencies are unavailable:
+```bash
+pytest -m "not integration"
+```
+
