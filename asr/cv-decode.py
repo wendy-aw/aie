@@ -69,7 +69,7 @@ async def check_api_health() -> bool:
         return False
 
 
-async def transcribe_batch(session: aiohttp.ClientSession, file_paths: List[Path], batch_id: int) -> List[Dict[str, Any]]:
+async def transcribe_batch(session: aiohttp.ClientSession, file_paths: List[Path]) -> List[Dict[str, Any]]:
     """Transcribe multiple MP3 files using the ASR batch API."""
     start_time = time.time()
     batch_size = len(file_paths)
@@ -236,7 +236,7 @@ async def process_files_batch(mp3_filenames: List[str], folder_path: Path, concu
                 
                 # Process existing files with batch API
                 if existing_files:
-                    batch_results = await transcribe_batch(session, existing_files, batch_id)
+                    batch_results = await transcribe_batch(session, existing_files)
                 
                 # Add missing files as errors
                 for missing_file in missing_files:
@@ -360,8 +360,8 @@ def save_updated_csv(original_csv: str, transcriptions: Dict[str, str], output_c
     logger.info(f"Added transcriptions for {sum(1 for t in transcription_texts if t)} files")
 
 
-async def main():
-    """Main function to orchestrate the transcription process."""
+def create_parser():
+    """Create and return the argument parser."""
     parser = argparse.ArgumentParser(description="Transcribe Common Voice MP3 files using ASR API and update CSV")
     parser.add_argument("--csv", default=INPUT_CSV, help="Input CSV file with audio filenames")
     parser.add_argument("--folder", default=DATA_FOLDER, help="Folder containing MP3 files")
@@ -369,7 +369,12 @@ async def main():
     parser.add_argument("--concurrent", type=int, default=DEFAULT_CONCURRENT, help=f"Max concurrent requests (default: {DEFAULT_CONCURRENT} based on {API_WORKERS} API workers)")
     parser.add_argument("--batch_size", type=int, default=DEFAULT_BATCH_SIZE, help=f"Number of files per batch (default: {DEFAULT_BATCH_SIZE})")
     parser.add_argument("--n_files", type=int, help="Limit number of files to process")
-    
+    return parser
+
+
+async def main():
+    """Main function to orchestrate the transcription process."""
+    parser = create_parser()
     args = parser.parse_args()
     
     # Validate arguments
