@@ -274,6 +274,7 @@ async def _process_batch_request(files: List[UploadFile], request_id: int, start
             results.append({
                 "filename": info["filename"],
                 "status": "error",
+                "transcription": "",
                 "error": info["error"],
                 "processing_time": info["processing_time"]
             })

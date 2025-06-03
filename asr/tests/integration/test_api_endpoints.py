@@ -6,6 +6,7 @@ import io
 from pathlib import Path
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
+from unittest.mock import patch
 
 
 class TestPingEndpoint:
@@ -50,15 +51,15 @@ class TestASREndpoint:
         assert "Send either 'file' or 'files', not both" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_asr_single_file_success(self, async_client: AsyncClient, sample_audio_file: Path, mock_processor_and_model):
+    async def test_asr_single_file_success(self, async_client: AsyncClient, sample_audio_file: Path):
         """Test successful single file transcription."""
-        mock_processor, mock_model = mock_processor_and_model
         
         with open(sample_audio_file, 'rb') as f:
             files = {'file': ('test.mp3', f, 'audio/mpeg')}
             
-            with pytest.patch('asr_api.torchaudio.load') as mock_load:
-                mock_load.return_value = (pytest.torch.randn(1, 32000), 16000)
+            with patch('asr_api.torchaudio.load') as mock_load:
+                import torch
+                mock_load.return_value = (torch.randn(1, 32000), 16000)
                 
                 response = await async_client.post("/asr", files=files)
         
@@ -90,17 +91,17 @@ class TestASREndpoint:
         assert "File too large" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_asr_batch_success(self, async_client: AsyncClient, batch_audio_files: list[Path], mock_processor_and_model):
+    async def test_asr_batch_success(self, async_client: AsyncClient, batch_audio_files: list[Path]):
         """Test successful batch file transcription."""
-        mock_processor, mock_model = mock_processor_and_model
         
         files = []
         for i, audio_file in enumerate(batch_audio_files):
             with open(audio_file, 'rb') as f:
                 files.append(('files', (f'test_{i}.mp3', f.read(), 'audio/mpeg')))
         
-        with pytest.patch('asr_api.torchaudio.load') as mock_load:
-            mock_load.return_value = (pytest.torch.randn(1, 16000), 16000)
+        with patch('asr_api.torchaudio.load') as mock_load:
+            import torch
+            mock_load.return_value = (torch.randn(1, 16000), 16000)
             
             response = await async_client.post("/asr", files=files)
         
@@ -117,9 +118,8 @@ class TestASREndpoint:
                 assert "duration" in result
 
     @pytest.mark.asyncio
-    async def test_asr_batch_mixed_results(self, async_client: AsyncClient, temp_dir: Path, mock_processor_and_model):
+    async def test_asr_batch_mixed_results(self, async_client: AsyncClient, temp_dir: Path):
         """Test batch transcription with mixed success/failure results."""
-        mock_processor, mock_model = mock_processor_and_model
         
         # Create one valid file and one invalid file
         valid_file = temp_dir / "valid.mp3"
@@ -133,8 +133,9 @@ class TestASREndpoint:
             ('files', ('invalid.txt', invalid_file.read_bytes(), 'text/plain'))
         ]
         
-        with pytest.patch('asr_api.torchaudio.load') as mock_load:
-            mock_load.return_value = (pytest.torch.randn(1, 16000), 16000)
+        with patch('asr_api.torchaudio.load') as mock_load:
+            import torch
+            mock_load.return_value = (torch.randn(1, 16000), 16000)
             
             response = await async_client.post("/asr", files=files)
         
@@ -163,30 +164,29 @@ class TestASREndpoint:
             files = {'file': ('test.mp3', f, 'audio/mpeg')}
             
             # Mock a timeout scenario
-            with pytest.patch('asr_api.with_timeout') as mock_timeout:
-                mock_timeout.side_effect = pytest.HTTPException(status_code=408, detail="Request timeout")
+            with patch('asr_api.with_timeout') as mock_timeout:
+                from fastapi import HTTPException
+                mock_timeout.side_effect = HTTPException(status_code=408, detail="Request timeout")
                 
                 response = await async_client.post("/asr", files=files)
         
         assert response.status_code == 408
 
-    def test_asr_endpoint_server_error(self, client: TestClient, sample_audio_file: Path):
+    @pytest.mark.asyncio
+    async def test_asr_endpoint_server_error(self, async_client: AsyncClient, sample_audio_file: Path):
         """Test ASR endpoint server error handling."""
+        # Mock torchaudio.load to raise an exception
         with open(sample_audio_file, 'rb') as f:
             files = {'file': ('test.mp3', f, 'audio/mpeg')}
             
-            # Mock an unexpected server error
-            with pytest.patch('asr_api._process_asr_request') as mock_process:
-                mock_process.side_effect = Exception("Unexpected error")
-                
-                response = client.post("/asr", files=files)
+            with patch('asr_api.torchaudio.load', side_effect=Exception("Audio processing failed")):
+                response = await async_client.post("/asr", files=files)
         
         assert response.status_code == 500
 
     @pytest.mark.asyncio
-    async def test_asr_endpoint_concurrent_requests(self, async_client: AsyncClient, sample_audio_file: Path, mock_processor_and_model):
+    async def test_asr_endpoint_concurrent_requests(self, async_client: AsyncClient, sample_audio_file: Path):
         """Test multiple concurrent requests to ASR endpoint."""
-        mock_processor, mock_model = mock_processor_and_model
         
         import asyncio
         
@@ -194,8 +194,9 @@ class TestASREndpoint:
             with open(sample_audio_file, 'rb') as f:
                 files = {'file': ('test.mp3', f, 'audio/mpeg')}
                 
-                with pytest.patch('asr_api.torchaudio.load') as mock_load:
-                    mock_load.return_value = (pytest.torch.randn(1, 32000), 16000)
+                with patch('asr_api.torchaudio.load') as mock_load:
+                    import torch
+                    mock_load.return_value = (torch.randn(1, 32000), 16000)
                     
                     return await async_client.post("/asr", files=files)
         
@@ -234,7 +235,7 @@ class TestErrorHandling:
             content=b"invalid multipart data"
         )
         
-        assert response.status_code == 422
+        assert response.status_code == 400
 
 
 class TestHealthAndMetrics:

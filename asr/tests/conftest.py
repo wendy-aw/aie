@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import AsyncGenerator, Generator
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from fastapi.testclient import TestClient
 import torch
 import torchaudio
@@ -38,7 +38,7 @@ def client():
 @pytest_asyncio.fixture
 async def async_client() -> AsyncGenerator[AsyncClient, None]:
     """Create an async test client for the FastAPI app."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         yield client
 
 
@@ -259,24 +259,36 @@ class MockHttpResponse:
 
 class MockHttpSession:
     """Mock HTTP session for aiohttp tests."""
-    def __init__(self, response_status=200, response_json=None, should_raise=None):
+    def __init__(self, response_status=200, response_json=None, should_raise=None, response_sequence=None):
         self.response_status = response_status
         self.response_json = response_json or {}
         self.should_raise = should_raise
+        self.response_sequence = response_sequence or []  # List of (status, json, exception) tuples
+        self.call_count = 0
         self.get_called_with = None
         self.post_called_with = None
         
     def get(self, url, **kwargs):
         self.get_called_with = (url, kwargs)
-        if self.should_raise:
-            raise self.should_raise
-        return MockHttpResponse(self.response_status, self.response_json)
+        return self._get_response()
         
     def post(self, url, **kwargs):
         self.post_called_with = (url, kwargs)
-        if self.should_raise:
-            raise self.should_raise
-        return MockHttpResponse(self.response_status, self.response_json)
+        return self._get_response()
+        
+    def _get_response(self):
+        """Get response based on call count and sequence."""
+        if self.response_sequence and self.call_count < len(self.response_sequence):
+            status, json_data, exception = self.response_sequence[self.call_count]
+            self.call_count += 1
+            if exception:
+                raise exception
+            return MockHttpResponse(status, json_data)
+        else:
+            # Use default response
+            if self.should_raise:
+                raise self.should_raise
+            return MockHttpResponse(self.response_status, self.response_json)
         
     async def __aenter__(self):
         return self
@@ -301,3 +313,16 @@ def mock_successful_http_session():
 def mock_failed_http_session():
     """Create a mock HTTP session that returns error responses."""
     return MockHttpSession(response_status=500)
+
+
+@pytest.fixture
+def cv_decode_module():
+    """Import and return the cv-decode module for testing."""
+    import importlib.util
+    
+    cv_decode_path = Path(__file__).parent.parent / "cv-decode.py"
+    spec = importlib.util.spec_from_file_location("cv_decode", cv_decode_path)
+    cv_decode = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cv_decode)
+    
+    return cv_decode

@@ -337,10 +337,10 @@ class TestMainFunction:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_main_function_early_exit_conditions(self, temp_dir: Path, sample_csv_file: Path):
+    async def test_main_function_early_exit_conditions(self, temp_dir: Path, sample_csv_data):
         """Test main function early exit conditions without heavy mocking."""
         csv_file = temp_dir / "test.csv"
-        csv_file.write_text(sample_csv_file.read_text())
+        csv_file.write_text(sample_csv_data)
         
         # Test with unhealthy API
         with patch.object(cv_decode, 'check_api_health', return_value=False), \
