@@ -1,6 +1,8 @@
 services:
   asr-api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.asr
     container_name: asr-api
     ports:
       - "${PORT}:${PORT}"
