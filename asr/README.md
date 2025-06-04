@@ -175,6 +175,8 @@ python cv-decode.py \
 - `--batch_size`: Number of files per batch (default: 5)
 - `--n_files`: Limit number of files to process
 
+**Note:** Long audio samples may cause batch processing to fail due to timeout or memory constraints. Consider using smaller batch sizes (`--batch_size 1-3`) when processing files longer than 20 seconds.
+
 All default parameters can be managed through the [`.env`](./.env) file:
 
 
