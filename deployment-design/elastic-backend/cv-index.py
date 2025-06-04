@@ -5,6 +5,7 @@ Script to index ASR CSV data into Elasticsearch cluster.
 
 import csv
 import json
+import os
 from typing import Dict, Any
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
@@ -23,14 +24,22 @@ def setup_logging() -> None:
 
 def create_elasticsearch_client(host: str = "localhost", port: int = 9200) -> Elasticsearch:
     """Create and return Elasticsearch client."""
+    import time
+    
     es = Elasticsearch([f"http://{host}:{port}"])
     
-    # Test connection
-    if not es.ping():
-        raise ConnectionError(f"Could not connect to Elasticsearch at {host}:{port}")
+    # Wait for Elasticsearch to be ready with retries
+    max_retries = 60
+    for attempt in range(max_retries):
+        try:
+            if es.ping():
+                logging.info(f"Connected to Elasticsearch at {host}:{port}")
+                return es
+        except Exception:
+            logging.info(f"Attempt {attempt + 1}/{max_retries}: Waiting for Elasticsearch to be ready...")
+            time.sleep(3)
     
-    logging.info(f"Connected to Elasticsearch at {host}:{port}")
-    return es
+    raise ConnectionError(f"Could not connect to Elasticsearch at {host}:{port} after {max_retries} attempts")
 
 
 def create_index_mapping() -> Dict[str, Any]:
@@ -178,13 +187,13 @@ def verify_indexing(es: Elasticsearch, index_name: str) -> None:
 def main():
     """Main function to orchestrate the indexing process."""
     parser = argparse.ArgumentParser(description='Index ASR CSV data into Elasticsearch')
-    parser.add_argument('--csv-file', default='../../asr/cv-valid-dev-updated.csv',
-                       help='Path to CSV file (default: ../../asr/cv-valid-dev-updated.csv)')
+    parser.add_argument('--csv-file', default='csv_to_index.csv',
+                       help='Path to CSV file (default: csv_to_index.csv)')
     parser.add_argument('--index-name', default='cv-transcriptions',
                        help='Elasticsearch index name (default: cv-transcriptions)')
-    parser.add_argument('--host', default='localhost',
-                       help='Elasticsearch host (default: localhost)')
-    parser.add_argument('--port', type=int, default=9200,
+    parser.add_argument('--host', default=os.getenv('ELASTICSEARCH_HOST', 'localhost'),
+                       help='Elasticsearch host')
+    parser.add_argument('--port', type=int, default=os.getenv('ELASTICSEARCH_PORT', 9200),
                        help='Elasticsearch port (default: 9200)')
     parser.add_argument('--batch-size', type=int, default=1000,
                        help='Batch size for bulk indexing (default: 1000)')
