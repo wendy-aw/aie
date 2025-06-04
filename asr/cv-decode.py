@@ -8,7 +8,6 @@ MP3 files can be downloaded from https://www.dropbox.com/scl/fi/i9yvfqpf7p8uye5o
 """
 
 import os
-import json
 import time
 import logging
 import asyncio
@@ -16,8 +15,7 @@ import aiohttp
 import aiofiles
 import pandas as pd
 from pathlib import Path
-from typing import Dict, List, Any, Optional
-from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List, Any
 import argparse
 from tqdm.asyncio import tqdm
 from dotenv import load_dotenv
@@ -409,8 +407,8 @@ async def main():
 
     # Apply file limit to the intersection
     if args.n_files and args.n_files < len(files_to_process):
-        files_to_process = files_to_process[:args.n_files]
-        logger.info(f"Limiting transcription to first {args.n_files} files")
+        files_to_process = files_to_process.sample(n=args.n_files)
+        logger.info(f"Limiting transcription to sample of  {args.n_files} files")
     transcriptions, durations = await process_files_batch(files_to_process, folder_path, args.concurrent, args.batch_size)
     
     # Save updated CSV

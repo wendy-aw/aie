@@ -205,16 +205,26 @@ another/folder/sample-000001.mp3,test audio"""
         
         output_file = temp_dir / "output.csv"
         
-        cv_decode.save_updated_csv(str(sample_csv_file), transcriptions, str(output_file))
+        durations = {
+            'sample-000000.mp3': 1.0,
+            'sample-000001.mp3': 2.0,
+            'sample-000002.mp3': 3.0
+        }
+        
+        cv_decode.save_updated_csv(str(sample_csv_file), transcriptions, durations, str(output_file))
         
         # Verify the file was created and has correct content
         assert output_file.exists()
         df = pd.read_csv(output_file)
         assert 'generated_text' in df.columns
+        assert 'duration' in df.columns
         assert len(df) == 3
         assert df['generated_text'].iloc[0] == 'transcribed text one'
         assert df['generated_text'].iloc[1] == 'transcribed text two'
         assert df['generated_text'].iloc[2] == 'transcribed text three'
+        assert df['duration'].iloc[0] == 1.0
+        assert df['duration'].iloc[1] == 2.0
+        assert df['duration'].iloc[2] == 3.0
 
 
 class TestBatchProcessing:
@@ -225,7 +235,7 @@ class TestBatchProcessing:
     async def test_process_files_batch_with_real_files(self, temp_dir: Path, batch_audio_files: list[Path]):
         """Test batch processing with actual file existence checks."""
         # Copy files to temp directory to simulate real scenario
-        for i, audio_file in enumerate(batch_audio_files):
+        for audio_file in batch_audio_files:
             target_file = temp_dir / audio_file.name
             target_file.write_bytes(audio_file.read_bytes())
         
@@ -245,28 +255,28 @@ class TestBatchProcessing:
                 for filename in mp3_filenames
             ]
             
-            transcriptions = await cv_decode.process_files_batch(
+            transcriptions, durations = await cv_decode.process_files_batch(
                 mp3_filenames, temp_dir, concurrent=2, batch_size=2
             )
             
             assert len(transcriptions) == len(mp3_filenames)
+            assert len(durations) == len(mp3_filenames)
             assert all(filename in transcriptions for filename in mp3_filenames)
             assert all(transcriptions[filename] != "" for filename in mp3_filenames)
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_process_files_batch_missing_files(self, temp_dir: Path):
-        """Test batch processing with missing files."""
-        mp3_filenames = ['missing1.mp3', 'missing2.mp3']
+    async def test_process_files_batch_empty_list(self, temp_dir: Path):
+        """Test batch processing with empty file list."""
+        mp3_filenames = []  # Empty list since files are pre-filtered to exist in both CSV and folder
         
-        # Don't create the files - they should be missing
-        transcriptions = await cv_decode.process_files_batch(
+        transcriptions, durations = await cv_decode.process_files_batch(
             mp3_filenames, temp_dir, concurrent=1, batch_size=1
         )
         
-        # Should return empty transcriptions for missing files
-        assert len(transcriptions) == len(mp3_filenames)
-        assert all(transcriptions[filename] == "" for filename in mp3_filenames)
+        # Empty input should result in empty output
+        assert len(transcriptions) == 0
+        assert len(durations) == 0
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -283,7 +293,7 @@ class TestBatchProcessing:
             # Return empty list to simulate failed API calls
             mock_transcribe.return_value = []
             
-            transcriptions = await cv_decode.process_files_batch(
+            transcriptions, durations = await cv_decode.process_files_batch(
                 mp3_filenames, temp_dir, concurrent=1, batch_size=2
             )
             
@@ -293,6 +303,7 @@ class TestBatchProcessing:
             
             # Should have no transcriptions since API "failed" (returned empty list)
             assert len(transcriptions) == 0
+            assert len(durations) == 0
 
 
 class TestMainFunction:
