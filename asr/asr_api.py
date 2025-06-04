@@ -283,7 +283,7 @@ async def _process_batch_request(files: List[UploadFile], request_id: int, start
                 "filename": info["filename"],
                 "status": "success",
                 "transcription": transcriptions[transcription_idx] if transcription_idx < len(transcriptions) else "",
-                "duration": str(info["duration"]),
+                "duration": info["duration"],
                 "processing_time": info["processing_time"]
             })
             transcription_idx += 1

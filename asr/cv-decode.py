@@ -110,7 +110,7 @@ async def transcribe_batch(session: aiohttp.ClientSession, file_paths: List[Path
                                 "file": result.get("filename", "unknown"),
                                 "status": result.get("status", "error"),
                                 "transcription": result.get("transcription", ""),
-                                "audio_duration": result.get("duration", ""),
+                                "duration": result.get("duration", ""),
                                 "processing_time": result.get("processing_time", round(duration, 2)),
                                 "attempt": attempt + 1
                             })
@@ -120,7 +120,7 @@ async def transcribe_batch(session: aiohttp.ClientSession, file_paths: List[Path
                             "file": file_paths[0].name if file_paths else "unknown",
                             "status": "success",
                             "transcription": batch_result.get("transcription", ""),
-                            "audio_duration": batch_result.get("duration", ""),
+                            "duration": batch_result.get("duration", ""),
                             "processing_time": round(duration, 2),
                             "attempt": attempt + 1
                         })
@@ -189,12 +189,13 @@ async def transcribe_batch(session: aiohttp.ClientSession, file_paths: List[Path
             await asyncio.sleep(RETRY_DELAY * (attempt + 1))
 
 
-async def process_files_batch(mp3_filenames: List[str], folder_path: Path, concurrent: int, batch_size: int = DEFAULT_BATCH_SIZE) -> Dict[str, str]:
+async def process_files_batch(mp3_filenames: List[str], folder_path: Path, concurrent: int, batch_size: int = DEFAULT_BATCH_SIZE) -> tuple[Dict[str, str], Dict[str, str]]:
     """Process MP3 file names from CSV using batch API requests."""
     connector = aiohttp.TCPConnector(limit=concurrent)
     timeout = aiohttp.ClientTimeout(total=600)  # Longer timeout for batch requests
     
     transcriptions = {}
+    durations = {}
     success_count = 0
     
     # Split files into batches
@@ -282,6 +283,7 @@ async def process_files_batch(mp3_filenames: List[str], folder_path: Path, concu
                 else:
                     for result in batch_results:
                         transcriptions[result["file"]] = result["transcription"]
+                        durations[result["file"]] = result.get("duration", 0)
                         if result["status"] != "success":
                             error_count += 1
         
@@ -289,7 +291,7 @@ async def process_files_batch(mp3_filenames: List[str], folder_path: Path, concu
             progress_bar.close()
     
     logger.info(f"Batch transcription completed: {success_count}/{len(mp3_filenames)} successful, {error_count} errors")
-    return transcriptions
+    return transcriptions, durations
 
 
 def load_csv_and_get_files(csv_path: str) -> List[str]:
@@ -324,18 +326,20 @@ def load_csv_and_get_files(csv_path: str) -> List[str]:
     return mp3_filenames
 
 
-def save_updated_csv(original_csv: str, transcriptions: Dict[str, str], output_csv: str):
+def save_updated_csv(original_csv: str, transcriptions: Dict[str, str], durations: Dict[str, str], output_csv: str):
     """Save updated CSV with transcription column."""
     # Load original CSV
     df = pd.read_csv(original_csv)
     logger.info(f"Loading original CSV: {original_csv}")
     
-    # Add transcription column
+    # Add transcription and duration columns
     transcription_texts = []
+    duration_values = []
     for _, row in df.iterrows():
         filename = row["filename"]
         if pd.isna(filename):
             transcription_texts.append("")
+            duration_values.append(0)
             continue
             
         # Extract just the filename part for lookup
@@ -347,17 +351,21 @@ def save_updated_csv(original_csv: str, transcriptions: Dict[str, str], output_c
         if not lookup_name.lower().endswith('.mp3'):
             lookup_name = lookup_name + '.mp3'
         
-        # Get transcription
+        # Get transcription and duration
         transcription = transcriptions.get(lookup_name, "")
+        duration = durations.get(lookup_name, 0)
         transcription_texts.append(transcription)
+        duration_values.append(duration)
     
-    # Add new column
+    # Add new columns
     df['generated_text'] = transcription_texts
+    df['duration'] = duration_values
     
     # Save updated CSV
     df.to_csv(output_csv, index=False)
     logger.info(f"Saved updated CSV: {output_csv}")
     logger.info(f"Added transcriptions for {sum(1 for t in transcription_texts if t)} files")
+    logger.info(f"Added durations for {sum(1 for d in duration_values if d)} files")
 
 
 def create_parser():
@@ -425,11 +433,11 @@ async def main():
         return 1
     
     logger.info(f"Starting transcription of {len(mp3_filenames)} files...")
-    transcriptions = await process_files_batch(mp3_filenames, folder_path, args.concurrent, args.batch_size)
+    transcriptions, durations = await process_files_batch(mp3_filenames, folder_path, args.concurrent, args.batch_size)
     
     # Save updated CSV
     try:
-        save_updated_csv(args.csv, transcriptions, args.output)
+        save_updated_csv(args.csv, transcriptions, durations, args.output)
     except Exception as e:
         logger.error(f"Error saving CSV: {str(e)}")
         return 1
