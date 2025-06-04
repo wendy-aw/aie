@@ -26,6 +26,12 @@ services:
       - "9200:9200"
     networks:
       - elastic
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    restart: unless-stopped
 
   elasticsearch-node2:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
@@ -52,6 +58,41 @@ services:
       - es-data2:/usr/share/elasticsearch/data
     networks:
       - elastic
+    restart: unless-stopped
+
+  elastic-backend:
+    build:
+      context: ./elastic-backend
+      dockerfile: Dockerfile.elastic-backend
+    container_name: elastic-backend
+    environment:
+      - ELASTICSEARCH_HOST=es-node1
+      - ELASTICSEARCH_PORT=9200
+    depends_on:
+      elasticsearch-node1:
+        condition: service_healthy
+      elasticsearch-node2:
+        condition: service_started
+    networks:
+      - elastic
+    restart: "no"
+
+  search-ui:
+    build:
+      context: ./search-ui
+      dockerfile: Dockerfile.search-ui
+    container_name: search-ui
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_ELASTICSEARCH_HOST_URL=http://es-node1:9200
+    depends_on:
+      - elasticsearch-node1
+      - elasticsearch-node2
+      - elastic-backend
+    networks:
+      - elastic
+    restart: unless-stopped
 
 volumes:
   es-data1:
