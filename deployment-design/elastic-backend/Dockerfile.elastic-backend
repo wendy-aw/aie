@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the indexing script and CSV file
+COPY cv-index.py .
+COPY csv_to_index.csv .
+
+# Wait for Elasticsearch to be ready and then run the indexing script
+CMD ["python", "cv-index.py"]
