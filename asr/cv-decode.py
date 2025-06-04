@@ -189,7 +189,7 @@ async def transcribe_batch(session: aiohttp.ClientSession, file_paths: List[Path
             await asyncio.sleep(RETRY_DELAY * (attempt + 1))
 
 
-async def process_files_batch(mp3_filenames: List[str], folder_path: Path, concurrent: int, batch_size: int = DEFAULT_BATCH_SIZE) -> tuple[Dict[str, str], Dict[str, str]]:
+async def process_files_batch(files_to_process: List[str], folder_path: Path, concurrent: int, batch_size: int = DEFAULT_BATCH_SIZE) -> tuple[Dict[str, str], Dict[str, str]]:
     """Process MP3 file names from CSV using batch API requests."""
     connector = aiohttp.TCPConnector(limit=concurrent)
     timeout = aiohttp.ClientTimeout(total=600)  # Longer timeout for batch requests
@@ -200,12 +200,12 @@ async def process_files_batch(mp3_filenames: List[str], folder_path: Path, concu
     
     # Split files into batches
     file_batches = []
-    for i in range(0, len(mp3_filenames), batch_size):
-        batch_files = mp3_filenames[i:i+batch_size]
+    for i in range(0, len(files_to_process), batch_size):
+        batch_files = files_to_process[i:i+batch_size]
         batch_paths = [folder_path / filename for filename in batch_files]
         file_batches.append((i // batch_size, batch_paths))
     
-    logger.info(f"Processing {len(mp3_filenames)} files in {len(file_batches)} batches of size {batch_size}")
+    logger.info(f"Processing {len(files_to_process)} files in {len(file_batches)} batches of size {batch_size}")
     
     async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
         # Create semaphore to limit concurrent batch requests
@@ -213,7 +213,7 @@ async def process_files_batch(mp3_filenames: List[str], folder_path: Path, concu
         
         # Progress bar setup
         progress_bar = tqdm(
-            total=len(mp3_filenames), 
+            total=len(files_to_process), 
             desc="Transcribing batches",
             unit="file",
             dynamic_ncols=True,
@@ -223,30 +223,7 @@ async def process_files_batch(mp3_filenames: List[str], folder_path: Path, concu
         async def process_batch_with_semaphore(batch_id: int, file_paths: List[Path]):
             nonlocal success_count
             async with semaphore:
-                # Filter existing files
-                existing_files = []
-                missing_files = []
-                
-                for file_path in file_paths:
-                    if file_path.exists():
-                        existing_files.append(file_path)
-                    else:
-                        missing_files.append(file_path)
-                
-                batch_results = []
-                
-                # Process existing files with batch API
-                if existing_files:
-                    batch_results = await transcribe_batch(session, existing_files)
-                
-                # Add missing files as errors
-                for missing_file in missing_files:
-                    batch_results.append({
-                        "file": missing_file.name,
-                        "status": "error",
-                        "transcription": "",
-                        "error": "File not found"
-                    })
+                batch_results = await transcribe_batch(session, file_paths)
                 
                 # Update progress and success count
                 batch_success_count = 0
@@ -290,11 +267,11 @@ async def process_files_batch(mp3_filenames: List[str], folder_path: Path, concu
         finally:
             progress_bar.close()
     
-    logger.info(f"Batch transcription completed: {success_count}/{len(mp3_filenames)} successful, {error_count} errors")
+    logger.info(f"Batch transcription completed: {success_count}/{len(files_to_process)} successful, {error_count} errors")
     return transcriptions, durations
 
 
-def load_csv_and_get_files(csv_path: str) -> List[str]:
+def load_csv_and_get_files(csv_path: str) -> set[str]:
     """Load CSV file and extract MP3 filenames."""
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"CSV file not found: {csv_path}")
@@ -305,7 +282,7 @@ def load_csv_and_get_files(csv_path: str) -> List[str]:
     
     # Extract filenames and ensure they have .mp3 extension
     filenames = df['filename'].tolist()
-    mp3_filenames = []
+    csv_filenames = set()
     
     for filename in filenames:
         if pd.isna(filename):
@@ -320,10 +297,8 @@ def load_csv_and_get_files(csv_path: str) -> List[str]:
         if not filename.lower().endswith('.mp3'):
             filename = filename + '.mp3'
         
-        mp3_filenames.append(filename)
-    
-    logger.info(f"Found {len(mp3_filenames)} MP3 file names in CSV")
-    return mp3_filenames
+        csv_filenames.add(filename)
+    return csv_filenames
 
 
 def save_updated_csv(original_csv: str, transcriptions: Dict[str, str], durations: Dict[str, str], output_csv: str):
@@ -399,8 +374,6 @@ async def main():
     logger.info(f"Output CSV: {args.output}")
     logger.info(f"Max concurrent requests: {args.concurrent}")
     logger.info(f"Batch size: {args.batch_size}")
-    if args.n_files:
-        logger.info(f"Limiting to {args.n_files} files")
     
     # Check API health
     logger.info("Checking API health...")
@@ -412,28 +385,33 @@ async def main():
     
     # Load CSV and get filenames
     try:
-        mp3_filenames = load_csv_and_get_files(args.csv)
-        if not mp3_filenames:
+        csv_filenames = load_csv_and_get_files(args.csv)
+        if not csv_filenames:
             logger.error(f"No MP3 file names found in CSV: {args.csv}")
             return 1
-        
-        # Apply file limit if specified
-        if args.n_files and args.n_files < len(mp3_filenames):
-            mp3_filenames = mp3_filenames[:args.n_files]
-            logger.info(f"Limiting transcription to first {args.n_files} files")
-            
     except (FileNotFoundError, ValueError) as e:
         logger.error(str(e))
         return 1
     
-    # Process files
+    # Check if data folder exists
     folder_path = Path(args.folder)
     if not folder_path.exists():
         logger.error(f"Audio data folder not found: {args.folder}")
         return 1
     
-    logger.info(f"Starting transcription of {len(mp3_filenames)} files...")
-    transcriptions, durations = await process_files_batch(mp3_filenames, folder_path, args.concurrent, args.batch_size)
+    # Find file names that exist in both CSV and data folder
+    folder_files = list(folder_path.glob("*.mp3"))
+    folder_filenames = {f.name for f in folder_files}
+    files_to_process = list(csv_filenames.intersection(folder_filenames))
+    
+    logger.info(f"Found {len(folder_filenames)} MP3 files in folder, {len(csv_filenames)} in CSV")
+    logger.info(f"Total of {len(files_to_process)} files exist in both CSV and folder")
+
+    # Apply file limit to the intersection
+    if args.n_files and args.n_files < len(files_to_process):
+        files_to_process = files_to_process[:args.n_files]
+        logger.info(f"Limiting transcription to first {args.n_files} files")
+    transcriptions, durations = await process_files_batch(files_to_process, folder_path, args.concurrent, args.batch_size)
     
     # Save updated CSV
     try:
@@ -445,7 +423,7 @@ async def main():
     # Summary
     total_time = time.time() - start_time
     success_count = sum(1 for t in transcriptions.values() if t.strip())
-    total_count = len(mp3_filenames)
+    total_count = len(files_to_process)
     
     logger.info("=" * 50)
     logger.info("TRANSCRIPTION COMPLETE")
