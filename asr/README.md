@@ -160,7 +160,7 @@ python cv-decode.py
 python cv-decode.py \
   --csv cv-valid-dev.csv \
   --folder cv-valid-dev \
-  --output cv-valid-dev-updated.csv \
+  --output ../deployment-design/elastic-backend/csv_to_index.csv \
   --concurrent 10 \
   --batch_size 8 \
   --n_files 100
@@ -170,7 +170,7 @@ python cv-decode.py \
 
 - `--csv`: Input CSV file with audio filenames (default: cv-valid-dev.csv)
 - `--folder`: Folder containing MP3 files (default: cv-valid-dev)
-- `--output`: Output CSV file with transcriptions (default: cv-valid-dev-updated.csv)
+- `--output`: Output CSV file with transcriptions (default: ../deployment-design/elastic-backend/csv_to_index.csv)
 - `--concurrent`: Max concurrent requests (default: 2x API workers)
 - `--batch_size`: Number of files per batch (default: 5)
 - `--n_files`: Limit number of files to process
