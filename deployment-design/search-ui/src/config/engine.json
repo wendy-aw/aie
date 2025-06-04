@@ -1,0 +1,17 @@
+{
+  "endpointBase": "https://localhost:9200",
+  "engineName": "asr-transcriptions",
+  "searchKey": "",
+  "searchFields": ["generated_text"],
+  "resultFields": [
+    "generated_text",
+    "age",
+    "gender",
+    "accent",
+    "duration"
+  ],
+  "querySuggestFields": ["generated_text"],
+  "titleField": "generated_text",
+  "sortFields": ["age", "gender", "accent", "duration"],
+  "facets": ["age", "gender", "accent", "duration"]
+}
