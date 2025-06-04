@@ -258,7 +258,7 @@ async def process_files_batch(files_to_process: List[str], folder_path: Path, co
                 else:
                     for result in batch_results:
                         transcriptions[result["file"]] = result["transcription"]
-                        durations[result["file"]] = result.get("duration", 0)
+                        durations[result["file"]] = result.get("duration", "")
                         if result["status"] != "success":
                             error_count += 1
         
@@ -305,40 +305,42 @@ def save_updated_csv(original_csv: str, transcriptions: Dict[str, str], duration
     df = pd.read_csv(original_csv)
     logger.info(f"Loading original CSV: {original_csv}")
     
-    # Add transcription and duration columns
-    transcription_texts = []
-    duration_values = []
-    for _, row in df.iterrows():
-        filename = row["filename"]
+    # Vectorized processing for efficiency
+    # Extract just filename part and ensure .mp3 extension
+    def normalize_filename(filename):
         if pd.isna(filename):
-            transcription_texts.append("")
-            duration_values.append(0)
-            continue
-            
-        # Extract just the filename part for lookup
-        lookup_name = str(filename)
-        if '/' in lookup_name:
-            lookup_name = lookup_name.split('/')[-1]
-        
-        # Ensure .mp3 extension for lookup
-        if not lookup_name.lower().endswith('.mp3'):
-            lookup_name = lookup_name + '.mp3'
-        
-        # Get transcription and duration
-        transcription = transcriptions.get(lookup_name, "")
-        duration = durations.get(lookup_name, 0)
-        transcription_texts.append(transcription)
-        duration_values.append(duration)
+            return ""
+        # Extract just the filename part, removing any directory path
+        filename = str(filename)
+        if '/' in filename:
+            filename = filename.split('/')[-1]
+        # Ensure .mp3 extension
+        if not filename.lower().endswith('.mp3'):
+            filename = filename + '.mp3'
+        return filename
     
-    # Add new columns
-    df['generated_text'] = transcription_texts
-    df['duration'] = duration_values
+    # Apply normalization to all filenames at once
+    lookup_names = df['filename'].apply(normalize_filename)
+    
+    # Only update rows where we have transcription data
+    # Create boolean mask for processed files
+    processed_mask = lookup_names.isin(transcriptions.keys())
+    
+    # Initialize columns with original values or empty strings for new columns
+    if 'generated_text' not in df.columns:
+        df['generated_text'] = ""
+    if 'duration' not in df.columns:
+        df['duration'] = ""
+    
+    # Only update processed files
+    df.loc[processed_mask, 'generated_text'] = lookup_names[processed_mask].map(transcriptions)
+    df.loc[processed_mask, 'duration'] = lookup_names[processed_mask].map(durations)
     
     # Save updated CSV
     df.to_csv(output_csv, index=False)
     logger.info(f"Saved updated CSV: {output_csv}")
-    logger.info(f"Added transcriptions for {sum(1 for t in transcription_texts if t)} files")
-    logger.info(f"Added durations for {sum(1 for d in duration_values if d)} files")
+    logger.info(f"Added transcriptions for {processed_mask.sum()} files")
+    logger.info(f"Added durations for {processed_mask.sum()} files")
 
 
 def create_parser():
@@ -407,7 +409,7 @@ async def main():
 
     # Apply file limit to the intersection
     if args.n_files and args.n_files < len(files_to_process):
-        files_to_process = files_to_process.sample(n=args.n_files)
+        files_to_process = files_to_process[:args.n_files]
         logger.info(f"Limiting transcription to sample of  {args.n_files} files")
     transcriptions, durations = await process_files_batch(files_to_process, folder_path, args.concurrent, args.batch_size)
     
