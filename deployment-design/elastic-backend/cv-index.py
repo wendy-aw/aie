@@ -193,7 +193,7 @@ def main():
                        help='Elasticsearch index name (default: cv-transcriptions)')
     parser.add_argument('--host', default=os.getenv('ELASTICSEARCH_HOST', 'localhost'),
                        help='Elasticsearch host')
-    parser.add_argument('--port', type=int, default=os.getenv('ELASTICSEARCH_PORT', 9200),
+    parser.add_argument('--port', type=int, default=9200,
                        help='Elasticsearch port (default: 9200)')
     parser.add_argument('--batch-size', type=int, default=1000,
                        help='Batch size for bulk indexing (default: 1000)')

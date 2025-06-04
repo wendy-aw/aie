@@ -1,5 +1,4 @@
 {
-  "endpointBase": "https://localhost:9200",
   "engineName": "asr-transcriptions",
   "searchKey": "",
   "searchFields": ["generated_text"],
