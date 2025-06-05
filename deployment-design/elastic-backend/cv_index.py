@@ -6,6 +6,7 @@ Script to index ASR CSV data into Elasticsearch cluster.
 import csv
 import json
 import os
+import tempfile
 from typing import Dict, Any
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
@@ -13,6 +14,8 @@ from tqdm import tqdm
 import argparse
 import logging
 import time
+import requests
+from urllib.parse import urlparse
 
 
 def setup_logging() -> None:
@@ -101,6 +104,42 @@ def process_csv_row(row: Dict[str, str]) -> Dict[str, Any]:
     return doc
 
 
+def download_csv_from_url(url: str) -> str:
+    """Download CSV file from URL to temporary file."""
+    logging.info(f"Downloading CSV from {url}")
+    
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+        
+        # Create temporary file
+        temp_file = tempfile.NamedTemporaryFile(mode='w+b', delete=False, suffix='.csv')
+        
+        # Download with progress bar
+        total_size = int(response.headers.get('content-length', 0))
+        progress_bar = tqdm(total=total_size, unit='B', unit_scale=True, desc="Downloading")
+        
+        for chunk in response.iter_content(chunk_size=8192):
+            temp_file.write(chunk)
+            progress_bar.update(len(chunk))
+        
+        progress_bar.close()
+        temp_file.close()
+        
+        logging.info(f"Downloaded CSV to temporary file: {temp_file.name}")
+        return temp_file.name
+        
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to download CSV from {url}: {e}")
+        raise
+
+
+def is_url(path: str) -> bool:
+    """Check if path is a URL."""
+    parsed = urlparse(path)
+    return parsed.scheme in ('http', 'https', 's3', 'gs')
+
+
 def generate_docs(csv_file_path: str, index_name: str):
     """Generator function to yield documents for bulk indexing."""
     with open(csv_file_path, 'r', encoding='utf-8') as file:
@@ -113,25 +152,33 @@ def generate_docs(csv_file_path: str, index_name: str):
             }
 
 
-def index_csv_data(es: Elasticsearch, csv_file_path: str, index_name: str, batch_size: int = 1000) -> None:
+def index_csv_data(es: Elasticsearch, csv_source: str, index_name: str, batch_size: int = 1000) -> None:
     """Index CSV data into Elasticsearch using bulk operations."""
-    logging.info(f"Starting to index data from {csv_file_path}")
+    logging.info(f"Starting to index data from {csv_source}")
     
-    # Count total rows for progress tracking
-    with open(csv_file_path, 'r', encoding='utf-8') as file:
-        total_rows = sum(1 for _ in file) - 1  # Subtract header row
-    
-    logging.info(f"Total rows to index: {total_rows}")
-    
-    # Use bulk helper for efficient indexing
-    progress_bar = tqdm(total=total_rows, desc="Indexing documents")
-    
-    def doc_generator():
-        for doc in generate_docs(csv_file_path, index_name):
-            progress_bar.update(1)
-            yield doc
+    # Download file if it's a URL (only once)
+    if is_url(csv_source):
+        csv_file_path = download_csv_from_url(csv_source)
+        cleanup_temp = True
+    else:
+        csv_file_path = csv_source
+        cleanup_temp = False
     
     try:
+        # Count total rows for progress tracking
+        with open(csv_file_path, 'r', encoding='utf-8') as file:
+            total_rows = sum(1 for _ in file) - 1  # Subtract header row
+        
+        logging.info(f"Total rows to index: {total_rows}")
+        
+        # Use bulk helper for efficient indexing
+        progress_bar = tqdm(total=total_rows, desc="Indexing documents")
+        
+        def doc_generator():
+            for doc in generate_docs(csv_file_path, index_name):
+                progress_bar.update(1)
+                yield doc
+        
         # Bulk index with custom batch size
         es_with_options = es.options(request_timeout=60)
         success_count, failed_items = bulk(
@@ -152,6 +199,11 @@ def index_csv_data(es: Elasticsearch, csv_file_path: str, index_name: str, batch
         progress_bar.close()
         logging.error(f"Error during bulk indexing: {e}")
         raise
+    finally:
+        # Clean up temporary file if we downloaded one
+        if cleanup_temp and os.path.exists(csv_file_path):
+            os.unlink(csv_file_path)
+            logging.info(f"Cleaned up temporary file: {csv_file_path}")
 
 
 def verify_indexing(es: Elasticsearch, index_name: str) -> None:
@@ -187,8 +239,8 @@ def verify_indexing(es: Elasticsearch, index_name: str) -> None:
 def main():
     """Main function to orchestrate the indexing process."""
     parser = argparse.ArgumentParser(description='Index ASR CSV data into Elasticsearch')
-    parser.add_argument('--csv-file', default='csv_to_index.csv',
-                       help='Path to CSV file (default: csv_to_index.csv)')
+    parser.add_argument('--csv-file', default=os.getenv('CSV_SOURCE_URL', 'csv_to_index.csv'),
+                       help='Path to CSV file or URL (supports http/https/s3/gs) (default: CSV_SOURCE_URL env var or csv_to_index.csv)')
     parser.add_argument('--index-name', default='cv-transcriptions',
                        help='Elasticsearch index name (default: cv-transcriptions)')
     parser.add_argument('--host', default=os.getenv('ELASTICSEARCH_HOST', 'localhost'),

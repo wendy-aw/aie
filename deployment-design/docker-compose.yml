@@ -67,6 +67,7 @@ services:
     container_name: elastic-backend
     environment:
       - ELASTICSEARCH_HOST=es-node1
+      - CSV_SOURCE_URL=${CSV_SOURCE_URL:-}
     depends_on:
       elasticsearch-node1:
         condition: service_healthy
