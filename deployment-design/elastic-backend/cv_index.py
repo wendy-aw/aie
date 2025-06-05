@@ -239,7 +239,11 @@ def verify_indexing(es: Elasticsearch, index_name: str) -> None:
 def main():
     """Main function to orchestrate the indexing process."""
     parser = argparse.ArgumentParser(description='Index ASR CSV data into Elasticsearch')
-    parser.add_argument('--csv-file', default=os.getenv('CSV_SOURCE_URL', 'csv_to_index.csv'),
+    # Get CSV_SOURCE_URL and default to local file if empty
+    csv_source_url = os.getenv('CSV_SOURCE_URL', '').strip()
+    default_csv = csv_source_url if csv_source_url else 'csv_to_index.csv'
+    
+    parser.add_argument('--csv-file', default=default_csv,
                        help='Path to CSV file or URL (supports http/https/s3/gs) (default: CSV_SOURCE_URL env var or csv_to_index.csv)')
     parser.add_argument('--index-name', default='cv-transcriptions',
                        help='Elasticsearch index name (default: cv-transcriptions)')
