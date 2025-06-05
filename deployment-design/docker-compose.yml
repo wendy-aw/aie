@@ -84,11 +84,11 @@ services:
     build:
       context: ./search-ui
       dockerfile: Dockerfile.search-ui
+      args:
+        REACT_APP_ELASTICSEARCH_HOST_URL: http://${HOST_IP:-localhost}:9200
     container_name: search-ui
     ports:
       - "3000:80"
-    environment:
-      - REACT_APP_ELASTICSEARCH_HOST_URL=http://${HOST_IP:-localhost}:9200
     depends_on:
       - elasticsearch-node1
       - elasticsearch-node2

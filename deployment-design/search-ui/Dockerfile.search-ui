@@ -12,6 +12,10 @@ RUN npm ci
 # Copy source code
 COPY . .
 
+# Set build-time environment variable
+ARG REACT_APP_ELASTICSEARCH_HOST_URL
+ENV REACT_APP_ELASTICSEARCH_HOST_URL=${REACT_APP_ELASTICSEARCH_HOST_URL}
+
 # Build the app
 RUN npm run build
 
