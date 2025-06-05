@@ -27,12 +27,17 @@ The indexer can read CSV data from:
 
 ### Quick Start
 
-1. **Configure CSV Source**: For remote CSV sources, edit `.env` file and set your CSV URL:
+1. **Configure Environment**: Edit `.env` file:
    ```bash
-   # Example URLs:
+   # For remote CSV sources, set your CSV URL:
    CSV_SOURCE_URL=https://example.com/data.csv
    CSV_SOURCE_URL=s3://bucket-name/transcriptions.csv
    CSV_SOURCE_URL=https://raw.githubusercontent.com/user/repo/main/data.csv
+   
+   # For external access, set your instance's IP address:
+   HOST_IP=your.instance.ip.address
+   # Leave as localhost for local development:
+   HOST_IP=localhost
    ```
 For local CSV files, leave `CSV_SOURCE_URL` empty. You can use the provided `elastic-backend/csv_to_index.csv` file or replace it with your own file. This will be mounted at `/app/csv_to_index.csv` inside the container.
 
@@ -42,7 +47,7 @@ For local CSV files, leave `CSV_SOURCE_URL` empty. You can use the provided `ela
    ```
 
 3. **Access Services**:
-   - Search UI: http://localhost:3000
+   - Search UI: http://localhost:3000 (or http://your.instance.ip:3000 for external access)
    - Elasticsearch: http://localhost:9200
 
 The platform will automatically:

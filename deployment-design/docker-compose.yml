@@ -13,7 +13,7 @@ services:
       - xpack.security.http.ssl.enabled=false
       - xpack.security.transport.ssl.enabled=false
       - http.cors.enabled=true
-      - http.cors.allow-origin=http://localhost:3000
+      - http.cors.allow-origin=http://${HOST_IP:-localhost}:3000
       - http.cors.allow-headers=X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization,x-elastic-client-meta
       - http.cors.allow-credentials=true
     ulimits:
@@ -47,7 +47,7 @@ services:
       - xpack.security.http.ssl.enabled=false
       - xpack.security.transport.ssl.enabled=false
       - http.cors.enabled=true
-      - http.cors.allow-origin=http://localhost:3000
+      - http.cors.allow-origin=http://${HOST_IP:-localhost}:3000
       - http.cors.allow-headers=X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization,x-elastic-client-meta
       - http.cors.allow-credentials=true
     ulimits:
