@@ -24,4 +24,25 @@ Thumbs.db
 # Test coverage
 htmlcov/
 .coverage
+.coverage.*
 
+# venv
+venv/
+.venv/
+env/
+.env/
+*env/
+*venv/
+
+# Node.js (search-ui specific)
+deployment-design/search-ui/node_modules/
+deployment-design/search-ui/npm-debug.log*
+deployment-design/search-ui/yarn-debug.log*
+deployment-design/search-ui/yarn-error.log*
+
+# Build outputs (search-ui specific)
+deployment-design/search-ui/build/
+deployment-design/search-ui/dist/
+
+# Package lock files (search-ui specific - keep package-lock.json, ignore yarn.lock if using npm)
+deployment-design/search-ui/yarn.lock
