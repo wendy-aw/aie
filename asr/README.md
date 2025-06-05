@@ -134,6 +134,7 @@ Transcribe audio files (single or batch).
     {
       "filename": "audio2.mp3",
       "status": "error",
+      "transcription": "",
       "error": "File too large",
       "processing_time": 0.01
     }
