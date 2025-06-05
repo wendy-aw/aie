@@ -12,6 +12,7 @@ from elasticsearch.helpers import bulk
 from tqdm import tqdm
 import argparse
 import logging
+import time
 
 
 def setup_logging() -> None:
@@ -24,7 +25,6 @@ def setup_logging() -> None:
 
 def create_elasticsearch_client(host: str = "localhost", port: int = 9200) -> Elasticsearch:
     """Create and return Elasticsearch client."""
-    import time
     
     es = Elasticsearch([f"http://{host}:{port}"])
     

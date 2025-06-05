@@ -1,4 +1,4 @@
-# Elastic Backend & Search UI
+# Task 3: Elastic Backend & Search UI
 
 This directory contains the search platform components for indexing and searching transcription data on a user interface.
 
@@ -58,8 +58,8 @@ In case you want to index the data manually (without using docker compose), you 
 ```bash
 cd elastic-backend
 pip install -r requirements.txt
-# Ensure csv_to_index.csv is present before running cv-index.py
-python cv-index.py --host localhost --port 9200
+# Ensure csv_to_index.csv is present before running cv_index.py
+python cv_index.py --host localhost --port 9200
 ```
 
 **Custom Options**:
