@@ -3,9 +3,11 @@
 This platform converts audio files into searchable text transcriptions and provides a web interface to search through them. It consists of two main components:
 
 1. **ASR API**: Converts MP3 audio files to text with Facebook's Wav2Vec2 model.
-2. **Search Platform**: Indexes transcriptions in Elasticsearch and provides a React web UI for full-text search with demographic filtering
+2. **Search Platform**: Indexes transcriptions in Elasticsearch and provides a React web UI for full-text search with demographic filtering.
 
 **Use Cases**: Search through podcast archives, meeting recordings, interview databases, or any large collection of audio content by text content and characteristics.
+
+The search platform is deployed at http://52.87.214.55:3000/.
 
 ## Repository Structure
 

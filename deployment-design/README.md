@@ -2,6 +2,8 @@
 
 This directory contains the search platform components for indexing and searching transcription data on a user interface.
 
+Deployment URL: http://52.87.214.55:3000/
+
 ## Components
 
 ### Elastic Backend
