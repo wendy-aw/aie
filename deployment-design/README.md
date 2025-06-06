@@ -25,6 +25,8 @@ The indexer can read CSV data from:
 ### Search UI
 **Purpose**: React web interface for searching and filtering transcriptions
 
+The search uses Elasticsearch's standard text matching (exact and partial word matches) rather than semantic search. This approach provides fast, predictable results and avoids the complexity and computational overhead of embedding models, making it suitable for the demo's focus on simplicity and quick deployment.
+
 ![Search UI Screenshot](search_ui.png)
 
 ## Setup & Usage
