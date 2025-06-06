@@ -217,7 +217,7 @@ pytest -m slow             # Performance/slow tests
 pytest -m "not slow"       # Skip slow tests
 
 # Run with coverage report
-pytest --cov=asr_api --cov=cv-decode --cov-report=html
+pytest --cov=asr_api --cov-report=html
 
 # Run specific test files
 pytest tests/unit/test_audio_processing.py
@@ -229,8 +229,6 @@ pytest tests/integration/test_api_endpoints.py
 ```
 tests/
 ├── conftest.py                     # Test configuration and fixtures
-├── fixtures/                      # Test data files
-│   └── test_data.csv
 ├── unit/                          # Unit tests
 │   ├── test_audio_processing.py   # Audio processing functions
 │   └── test_cv_decode.py          # CV-decode functionality
