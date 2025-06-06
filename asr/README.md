@@ -19,18 +19,15 @@ A high-performance FastAPI-based microservice for transcribing MP3 audio files u
 
 ```bash
 # Install dependencies
+cd asr
 pip install -r requirements.txt
 ```
 
 ### 2. Configuration
 
-Customize the environment file `.env`
+Customize the environment file `asr/.env`.
 
-### 3. Prepare audio files
-
-Add your audio files into the `cv-valid-dev` folder or change the `DATA_FOLDER` path in the `.env` file.
-
-### 4. Start the API Server
+### 3. Start the API Server
 
 #### Option 1: Local Deployment
 
@@ -72,12 +69,12 @@ The startup script will:
 
 ```bash
 # Build and run with docker-compose
-docker-compose up --build
+docker compose up --build
 ```
 
 This will build the Docker image and start a container with the API server. The server will be exposed on port 8001 and can be accessed from the host machine.
 
-### 5. Test the API
+### 4. Test the API
 
 ```bash
 # Health check
@@ -86,13 +83,13 @@ curl http://localhost:8001/ping
 # Single file transcription
 curl -X POST "http://localhost:8001/asr" \
   -H "Content-Type: multipart/form-data" \
-  -F "file=@asr/cv-valid-dev/sample-000000.mp3"
+  -F "file=@path/to/your/file.mp3"
 
 # Batch transcription
 curl -X POST "http://localhost:8001/asr" \
   -H "Content-Type: multipart/form-data" \
-  -F "files=@asr/cv-valid-dev/sample-000000.mp3" \
-  -F "files=@asr/cv-valid-dev/sample-000001.mp3"
+  -F "files=@path/to/your/file1.mp3" \
+  -F "files=@path/to/your/file2.mp3"
 ```
 
 ## API Endpoints
@@ -150,6 +147,10 @@ The script uses batching and concurrency for optimal performance:
 - Audio files are grouped and sent in batches, reducing the number of HTTP requests and improving throughput.
 - By batching audio files, the ASR model can also process multiple files simultaneously, reducing the total inference time.
 - Multiple batches are processed concurrently, leveraging asynchronous requests to maximize speed and server utilization.
+
+
+### Configuration
+Set your configurations in the `.env` file and change the `DATA_FOLDER` path to the folder containing your MP3 files
 
 ### Usage
 
@@ -237,47 +238,6 @@ tests/
     ├── test_api_endpoints.py      # API endpoint tests
     ├── test_performance.py        # Performance tests
     └── test_end_to_end.py         # End-to-end workflows
-```
-
-### Test Categories
-
-#### Unit Tests (`pytest -m unit`)
-- Audio processing functions
-- Input validation
-- Error handling
-- Configuration loading
-- CSV processing logic
-
-#### Integration Tests (`pytest -m integration`)
-- API endpoint functionality
-- Request/response handling
-- Error scenarios
-- Multi-file processing
-
-#### Performance Tests (`pytest -m slow`)
-- Response time benchmarks
-- Concurrent request handling
-- Memory usage stability
-- Batch processing efficiency
-- Scalability tests
-
-### Test Fixtures
-
-The test suite includes comprehensive fixtures:
-
-- **Audio Files**: Synthetic audio files for testing
-- **CSV Data**: Sample datasets for batch processing
-- **Mock Objects**: Mocked ML models for faster testing
-- **Temporary Directories**: Isolated test environments
-
-### Running Tests in CI/CD
-
-```bash
-# Fast test suite (excludes slow tests)
-pytest -m "not slow" --cov=asr_api --cov=cv-decode
-
-# Full test suite with performance tests
-pytest --cov=asr_api --cov=cv-decode --cov-report=xml
 ```
 
 
