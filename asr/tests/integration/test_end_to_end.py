@@ -13,6 +13,7 @@ import requests
 import aiohttp
 
 
+@pytest.mark.integration
 class TestEndToEndWorkflow:
     """Test complete end-to-end workflow from CSV to results."""
 
@@ -102,7 +103,6 @@ class TestEndToEndWorkflow:
         
         assert transcriptions == expected_transcriptions
 
-    @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_api_server_integration(self, sample_audio_file: Path):
         """Test integration with actual API server (if running)."""
@@ -146,7 +146,7 @@ class TestEndToEndWorkflow:
         project_root = Path(__file__).parent.parent.parent
         
         build_result = subprocess.run(
-            ["docker", "build", "-t", "asr-api-test", "."],
+            ["docker", "build", "-f", "Dockerfile.asr", "-t", "asr-api-test", "."],
             cwd=project_root,
             capture_output=True,
             text=True,
@@ -226,6 +226,7 @@ class TestEndToEndWorkflow:
             subprocess.run(["docker", "rm", container_name], capture_output=True)
 
 
+@pytest.mark.integration
 class TestErrorRecovery:
     """Test error recovery and resilience."""
 
@@ -347,6 +348,7 @@ another_valid.mp3,another test"""
         assert mock_session.call_count == 3  # Failed twice, succeeded on third
 
 
+@pytest.mark.integration
 class TestConfigurationVariations:
     """Test different configuration scenarios."""
 

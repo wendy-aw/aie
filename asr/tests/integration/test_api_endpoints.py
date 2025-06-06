@@ -9,6 +9,7 @@ from httpx import AsyncClient
 from unittest.mock import patch
 
 
+@pytest.mark.integration
 class TestPingEndpoint:
     """Test ping endpoint."""
 
@@ -28,6 +29,7 @@ class TestPingEndpoint:
         assert response.json() == {"message": "pong"}
 
 
+@pytest.mark.integration
 class TestASREndpoint:
     """Test ASR transcription endpoint."""
 
@@ -212,6 +214,7 @@ class TestASREndpoint:
             assert "duration" in data
 
 
+@pytest.mark.integration
 class TestErrorHandling:
     """Test error handling across the API."""
 
@@ -238,6 +241,7 @@ class TestErrorHandling:
         assert response.status_code == 400
 
 
+@pytest.mark.integration
 class TestHealthAndMetrics:
     """Test health and monitoring endpoints."""
 

@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 
+@pytest.mark.integration
 class TestPerformance:
     """Test performance characteristics of the ASR API."""
 
@@ -201,6 +202,7 @@ class TestPerformance:
         assert num_requests / total_time > 100  # More than 100 RPS
 
 
+@pytest.mark.integration
 class TestScalability:
     """Test scalability characteristics."""
 
@@ -246,6 +248,7 @@ class TestScalability:
         assert results[10]['time_per_file'] <= results[1]['time_per_file'] * 1.2
 
 
+@pytest.mark.integration
 class TestStressTest:
     """Stress tests for the API."""
 
