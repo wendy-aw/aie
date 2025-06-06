@@ -79,6 +79,7 @@ services:
     networks:
       - elastic
     restart: "no"
+    command: ["sh", "-c", "sleep 30 && python cv_index.py"]
 
   search-ui:
     build:

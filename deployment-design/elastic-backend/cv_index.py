@@ -276,8 +276,12 @@ def main():
         
         logging.info("Indexing completed successfully!")
         
+        
     except Exception as e:
-        logging.error(f"Error: {e}")
+        logging.error(f"CRITICAL: Elastic backend failed - {e}")
+        logging.error("WARNING: Search UI will not work without indexed data!")
+        logging.error("To fix: Check Elasticsearch connection and restart this service")
+        
         raise
 
 

@@ -5,7 +5,7 @@
   "dependencies": {
     "@elastic/react-search-ui": "latest",
     "@elastic/search-ui-app-search-connector": "latest",
-    "@elastic/search-ui-elasticsearch-connector": "^1.24.1",
+    "@elastic/search-ui-elasticsearch-connector": "latest",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
     "react-scripts": "5.0.0"
