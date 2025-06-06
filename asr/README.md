@@ -1,6 +1,8 @@
 # Task 2: ASR (Automatic Speech Recognition) Microservice
 
-A high-performance FastAPI-based microservice for transcribing MP3 audio files using Facebook's wav2vec 2.0 model, with batch processing capabilities and a script for processing the Common Voice dataset.
+A FastAPI-based microservice for transcribing MP3 audio files using Facebook's wav2vec 2.0 model, with batch processing capabilities and a script for processing the Common Voice dataset.
+
+**Note**: This system is designed for batch processing workflows, not real-time transcription. The `cv-decode` script processes entire datasets in batches, making it suitable for offline analysis and bulk data processing rather than live audio streaming.
 
 ## Features
 

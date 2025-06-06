@@ -2,6 +2,8 @@
 
 This directory contains the search platform components for indexing and searching transcription data on a user interface.
 
+**⚠️ Demo/Development System**: This deployment is designed for rapid demonstration and development on a single VM using Docker Compose. The architecture prioritizes simplicity and quick setup - the frontend directly queries Elasticsearch without an application layer, security features are disabled for ease of access, and all services run on one machine to minimize infrastructure requirements and deployment complexity.
+
 Deployment URL: http://52.87.214.55:3000/
 
 ## Components
