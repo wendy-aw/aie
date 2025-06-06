@@ -17,6 +17,9 @@ REQUEST_TIMEOUT = int(os.getenv('REQUEST_TIMEOUT_SECONDS', '60'))
 INFERENCE_TIMEOUT = int(os.getenv('INFERENCE_TIMEOUT_SECONDS', '30'))
 LOG_LEVEL = getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper())
 
+# Create logs directory if it doesn't exist
+os.makedirs('logs', exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=LOG_LEVEL,

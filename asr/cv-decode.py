@@ -37,6 +37,9 @@ API_WORKERS = int(os.getenv('WORKERS', '1'))
 DEFAULT_CONCURRENT = int(os.getenv('DEFAULT_CONCURRENT', str(API_WORKERS * 2 if API_WORKERS > 1 else 2)))
 DEFAULT_BATCH_SIZE = int(os.getenv('DEFAULT_BATCH_SIZE', '5'))
 
+# Create logs directory if it doesn't exist
+os.makedirs('logs', exist_ok=True)
+
 # Configure logging
 LOG_LEVEL = getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper())
 logging.basicConfig(
