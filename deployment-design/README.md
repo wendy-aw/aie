@@ -29,14 +29,14 @@ The indexer can read CSV data from:
 
 ### Quick Start
 
-1. **Configure Environment**: Edit `.env` file:
+1. **Configure Environment**: Edit `deployment-design/.env` file:
    ```bash
    # For remote CSV sources, set your CSV URL:
    CSV_SOURCE_URL=https://example.com/data.csv
    CSV_SOURCE_URL=s3://bucket-name/transcriptions.csv
    CSV_SOURCE_URL=https://raw.githubusercontent.com/user/repo/main/data.csv
    
-   # For external access, set your instance's IP address:
+   # For external access, set your instance''s IP address e.g. 52.87.214.55, without http://
    HOST_IP=your.instance.ip.address
    # Leave as localhost for local development:
    HOST_IP=localhost
@@ -45,7 +45,8 @@ For local CSV files, leave `CSV_SOURCE_URL` empty. You can use the provided `ela
 
 2. **Start Platform**: This starts all services and indexes your data:
    ```bash
-   docker compose up --build
+   cd deployment-design
+   docker compose up --build -d
    ```
 
 3. **Access Services**:
@@ -75,7 +76,7 @@ docker compose up search-ui
 For development or custom indexing scenarios:
 
 ```bash
-cd elastic-backend
+cd deployment-design/elastic-backend
 pip install -r requirements.txt
 
 # Index from URL
@@ -96,7 +97,7 @@ python cv_index.py --csv-file https://example.com/data.csv --host localhost
 ### Search UI Development
 Before running the search UI, make sure that the Elasticsearch cluster is running and the data is indexed.
 ```bash
-cd search-ui
+cd deployment-design/search-ui
 npm install
 npm start
 # Available at http://localhost:3000 (development server)
